@@ -5,13 +5,14 @@ import { ChevronDown } from "lucide-react";
 import { VerticalSlider } from "./VerticalSlider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { IS_VERSION, parseIsFile, type IsDoc } from "@/lib/isFormat";
+import { ColorPicker } from "./ColorPicker";
+import { rememberColor } from "@/lib/colorValues";
 
 type Tool = "brush" | "bucket" | "eraser" | "lasso" | "transform" | "blur" | "smudge" | "hand";
 type Layer = { id: number; name: string; visible: boolean; canvas: HTMLCanvasElement };
 type Pt = { x: number; y: number; p: number };
 
 const W = 2048, H = 1536;
-const SWATCHES = ["#111111", "#ffffff", "#ff3b30", "#ff9500", "#ffcc00", "#34c759", "#00c7be", "#007aff", "#5856d6", "#af52de", "#ff2d55", "#8e6e53"];
 const TOOLS: { id: Tool; icon: typeof Brush; label: string }[] = [
   { id: "brush", icon: Brush, label: "Brush" },
   { id: "bucket", icon: PaintBucket, label: "Paint bucket" },
@@ -46,6 +47,7 @@ export function DrawingApp() {
   const [activeId, setActiveId] = useState(0);
   const [tool, setTool] = useState<Tool>("brush");
   const [color, setColor] = useState("#111111");
+  const [recentColors, setRecentColors] = useState(["#111111"]);
   const [size, setSize] = useState(12);
   const [opacity, setOpacity] = useState(100);
   const [panel, setPanel] = useState<null | "color" | "layers">(null);
@@ -387,6 +389,7 @@ export function DrawingApp() {
   const doUndo = () => history(undo, redo), doRedo = () => history(redo, undo);
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLElement && (e.target.closest('[aria-label="Color picker"]') || e.target.matches("input, textarea, [contenteditable=true]"))) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? doRedo() : doUndo(); }
       if (e.key === "Escape" || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d")) { e.preventDefault(); setSel(null); return; }
       const map: Record<string, Tool> = { b: "brush", g: "bucket", e: "eraser", s: "lasso", v: "transform", r: "blur", u: "smudge", h: "hand" };
@@ -512,18 +515,7 @@ export function DrawingApp() {
       </div>
 
       {panel === "color" && (
-        <div className="glass-strong animate-pop absolute left-3 top-16 w-72 rounded-3xl p-4 sm:left-36">
-          <p className="mb-3 text-sm font-semibold">Color</p>
-          <div className="grid grid-cols-6 gap-2">
-            {SWATCHES.map((c) => (
-              <button key={c} onClick={() => setColor(c)} aria-label={c} className={`aspect-square rounded-full border transition-transform active:scale-90 ${color === c ? "ring-2 ring-primary ring-offset-2 ring-offset-transparent" : ""}`} style={{ background: c }} />
-            ))}
-          </div>
-          <label className="mt-4 flex items-center justify-between rounded-2xl bg-muted px-3 py-2 text-sm">
-            <span className="text-muted-foreground">Custom</span>
-            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-8 w-14 cursor-pointer rounded-lg bg-transparent" />
-          </label>
-        </div>
+        <ColorPicker color={color} recent={recentColors} onChange={setColor} onCommit={(c) => setRecentColors((recent) => rememberColor(recent, c))} onClose={() => setPanel(null)} />
       )}
 
       {panel === "layers" && (

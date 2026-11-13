@@ -28,3 +28,6 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+- Keep color picking in a dedicated ColorPicker with colord conversions; this isolates pointer interactions and validates Hex/RGB/HSL consistently.
+- Keep recent colors in drawing-session state, recording completed picks rather than every drag sample; reopening the menu preserves useful recents without storing artwork.

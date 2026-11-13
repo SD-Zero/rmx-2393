@@ -42,6 +42,11 @@
   --glass-strong: oklch(0.24 0.01 260 / 0.7);
   --glass-border: oklch(1 0 0 / 0.18);
   --shadow-glass: 0 10px 40px -10px oklch(0 0 0 / 0.5), inset 0 1px 0 oklch(1 0 0 / 0.25), inset 0 -1px 0 oklch(1 0 0 / 0.05);
+  --picker-spectrum: conic-gradient(in srgb, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  --picker-white: #fff;
+  --picker-black: #000;
+  --picker-clear: transparent;
+  --picker-handle-shadow: 0 0 0 1px oklch(0 0 0 / .5), 0 2px 5px oklch(0 0 0 / .4);
 }
 
 @layer base {
@@ -89,3 +94,11 @@
 @utility animate-pop { animation: pop-in .22s cubic-bezier(.2,.9,.3,1.2); }
 @keyframes ants { to { stroke-dashoffset: -20; } }
 @utility ants { animation: ants .8s linear infinite; }
+
+.color-panel { width: min(288px, calc(100vw - 24px)); max-height: calc(100dvh - 80px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; }
+.color-wheel { position: relative; width: 100%; aspect-ratio: 1; touch-action: none; }
+.hue-ring { background: var(--picker-spectrum); cursor: crosshair; touch-action: none; }
+.hue-ring::before { content: ""; position: absolute; inset: 12%; border-radius: 50%; background: var(--background); }
+.color-square { inset: 23%; background: linear-gradient(to top, var(--picker-black), var(--picker-clear)), linear-gradient(to right, var(--picker-white), var(--picker-clear)), var(--picker-hue); touch-action: none; cursor: crosshair; }
+.color-handle { position: absolute; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--picker-white); box-shadow: var(--picker-handle-shadow); transform: translate(-50%, -50%); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .animate-pop { animation: none; } }
