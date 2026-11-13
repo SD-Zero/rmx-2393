@@ -7,6 +7,7 @@ export type IsDoc = {
   version: number;
   width: number;
   height: number;
+  title?: string;
   activeIndex: number;
   brush: { tool: string; color: string; size: number; opacity: number };
   layers: IsLayer[];

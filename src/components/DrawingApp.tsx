@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Brush, PaintBucket, Eraser, Lasso, Move, Droplet, Pointer, Undo2, Redo2, Layers, Trash2, Plus, Eye, EyeOff, Lock, LockOpen } from "lucide-react";
 import { floodMask, smudgeStart, smudgeDab, type Smudge } from "@/lib/paintOps";
 import { ChevronDown } from "lucide-react";
@@ -7,21 +7,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { IS_VERSION, parseIsFile, type IsDoc } from "@/lib/isFormat";
 import { ColorPicker } from "./ColorPicker";
 import { rememberColor } from "@/lib/colorValues";
+import { ToolShelf } from "./ToolShelf";
+import { Button } from "@/components/ui/button";
+import { TOOL_ITEMS, artworkFilename, artworkName, type Tool } from "@/lib/toolbar";
 
-type Tool = "brush" | "bucket" | "eraser" | "lasso" | "transform" | "blur" | "smudge" | "hand";
 type Layer = { id: number; name: string; visible: boolean; canvas: HTMLCanvasElement };
 type Pt = { x: number; y: number; p: number };
 
 const W = 2048, H = 1536;
-const TOOLS: { id: Tool; icon: typeof Brush; label: string }[] = [
-  { id: "brush", icon: Brush, label: "Brush" },
-  { id: "bucket", icon: PaintBucket, label: "Paint bucket" },
-  { id: "eraser", icon: Eraser, label: "Eraser" },
-  { id: "lasso", icon: Lasso, label: "Lasso select" },
-  { id: "transform", icon: Move, label: "Transform" },
-  { id: "blur", icon: Droplet, label: "Blur" },
-  { id: "smudge", icon: Pointer, label: "Smudge" },
-];
 type P2 = { x: number; y: number };
 const selPath = (pts: P2[], dx = 0, dy = 0) => {
   const p = new Path2D(); pts.forEach((q, i) => (i ? p.lineTo(q.x + dx, q.y + dy) : p.moveTo(q.x + dx, q.y + dy))); p.closePath(); return p;
@@ -46,6 +39,7 @@ export function DrawingApp() {
   const [layers, setLayers] = useState<Layer[]>([]);
   const [activeId, setActiveId] = useState(0);
   const [tool, setTool] = useState<Tool>("brush");
+  const [title, setTitle] = useState("Untitled");
   const [color, setColor] = useState("#111111");
   const [recentColors, setRecentColors] = useState(["#111111"]);
   const [size, setSize] = useState(12);
@@ -272,6 +266,15 @@ export function DrawingApp() {
       return;
     }
     if (tool === "hand" || e.button === 1) { gesture.current = { d: 0, a: 0, cx: e.clientX, cy: e.clientY, v: viewNow.current }; return; }
+    if (tool === "eyedropper") {
+      const p = toCanvas(e), x = Math.floor(p.x), y = Math.floor(p.y);
+      if (x >= 0 && y >= 0 && x < W && y < H) {
+        const ctx = flatten().getContext("2d");
+        const px = ctx?.getImageData(x, y, 1, 1).data;
+        if (px && (px[3] ?? 0) > 0) { const c = `#${[px[0] ?? 0, px[1] ?? 0, px[2] ?? 0].map((n) => n.toString(16).padStart(2, "0")).join("")}`; setColor(c); setRecentColors((recent) => rememberColor(recent, c)); }
+      }
+      return;
+    }
     if (!active || !active.visible) return;
     const p = toCanvas(e), pr = e.pointerType === "pen" ? e.pressure || 0.5 : 0.5;
     if (tool === "lasso") { lasso.current = [p]; setLassoPts([p]); return; }
@@ -410,21 +413,21 @@ export function DrawingApp() {
     for (const l of layers) if (l.visible) ctx.drawImage(l.canvas, 0, 0);
     return c;
   }
-  const exportPng = () => download(flatten().toDataURL("image/png"), "artwork.png");
-  const exportJpeg = () => download(flatten("#ffffff").toDataURL("image/jpeg", 0.92), "artwork.jpeg");
+  const exportPng = () => download(flatten().toDataURL("image/png"), artworkFilename(title, "png"));
+  const exportJpeg = () => download(flatten("#ffffff").toDataURL("image/jpeg", 0.92), artworkFilename(title, "jpeg"));
   function exportIs() {
-    const doc: IsDoc = { format: "glass-canvas", version: IS_VERSION, width: W, height: H,
+    const doc: IsDoc = { format: "glass-canvas", version: IS_VERSION, width: W, height: H, title: artworkName(title),
       activeIndex: Math.max(0, layers.findIndex((l) => l.id === activeId)),
       brush: { tool, color, size, opacity },
       layers: layers.map((l) => ({ name: l.name, visible: l.visible, png: l.canvas.toDataURL("image/png") })) };
     const url = URL.createObjectURL(new Blob([JSON.stringify(doc)], { type: "application/json" }));
-    download(url, "artwork.is"); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    download(url, artworkFilename(title, "is")); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   function resetHistory() { undo.current = []; redo.current = []; setSel(null); force((n) => n + 1); }
   function newCanvas() {
     if (!confirm("Start a new canvas? Anything you haven't exported will be lost.")) return;
     const bg = makeLayer("Background"); const ctx = bg.canvas.getContext("2d")!; ctx.fillStyle = "#fbfaf7"; ctx.fillRect(0, 0, W, H);
-    const l1 = makeLayer("Layer 1"); setLayers([bg, l1]); setActiveId(l1.id); resetHistory(); fit();
+    const l1 = makeLayer("Layer 1"); setLayers([bg, l1]); setActiveId(l1.id); setTitle("Untitled"); resetHistory(); fit();
   }
   const loadImg = (src: string) => new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("Couldn't read that image.")); i.src = src; });
   const pickFile = (accept: string, then: (f: File) => void) => {
@@ -434,13 +437,14 @@ export function DrawingApp() {
   const openIs = () => pickFile(".is,application/json", async (f) => {
     try {
       const doc = parseIsFile(await f.text());
+      setTitle(typeof doc.title === "string" ? artworkName(doc.title) : "Untitled");
       const next = await Promise.all(doc.layers.map(async (d) => {
         const l = makeLayer(d.name); l.visible = d.visible !== false;
         l.canvas.getContext("2d")!.drawImage(await loadImg(d.png), 0, 0, W, H); return l;
       }));
       setLayers(next); setActiveId(next[doc.activeIndex]!.id);
       const b = doc.brush;
-      if (b) { if (TOOLS.some((t) => t.id === b.tool)) setTool(b.tool as Tool); if (/^#[0-9a-f]{6}$/i.test(b.color)) setColor(b.color); setSize(b.size || 12); setOpacity(b.opacity || 100); }
+      if (b) { const item = TOOL_ITEMS.find((t) => t.tool === b.tool); if (item?.tool) setTool(item.tool); if (/^#[0-9a-f]{6}$/i.test(b.color)) setColor(b.color); setSize(b.size || 12); setOpacity(b.opacity || 100); }
       resetHistory(); fit();
     } catch (err) { alert((err as Error).message); }
   });
@@ -455,6 +459,26 @@ export function DrawingApp() {
     } catch (err) { alert((err as Error).message); } finally { URL.revokeObjectURL(url); }
   });
   function fit() { const s = Math.min((innerWidth - 40) / W, (innerHeight - 40) / H); setView({ s, r: 0, x: (innerWidth - W * s) / 2, y: (innerHeight - H * s) / 2 }); }
+
+  function activateShelf(id: string) {
+    setPanel(null);
+    const item = TOOL_ITEMS.find((t) => t.id === id);
+    if (item?.tool) { pickTool(item.tool); return; }
+    if (id === "fit") { fit(); return; }
+    if (id === "resetRotation") { const v = viewNow.current, p = toWorld(innerWidth / 2, innerHeight / 2); setView(anchor(p.x, p.y, innerWidth / 2, innerHeight / 2, v.s, 0)); return; }
+    if (id === "deselect") { setSel(null); return; }
+    if (id === "clear") { clearLayer(); return; }
+    if (id === "import") { importImage(); return; }
+    if (id === "export") { exportPng(); return; }
+    if (id === "addLayer") { const l = makeLayer(`Layer ${layers.length}`); setLayers((ls) => [...ls, l]); setActiveId(l.id); return; }
+    if (!active) return;
+    if (id === "duplicate") { const l = makeLayer(`${active.name} copy`); l.canvas.getContext("2d")?.drawImage(active.canvas, 0, 0); setLayers((ls) => [...ls, l]); setActiveId(l.id); return; }
+    if (id === "flipH" || id === "flipV") {
+      const ctx = active.canvas.getContext("2d"); if (!ctx) return;
+      const before = ctx.getImageData(0, 0, W, H), copy = mkCanvas(W, H); copy.getContext("2d")?.drawImage(active.canvas, 0, 0);
+      ctx.save(); ctx.clearRect(0, 0, W, H); ctx.translate(id === "flipH" ? W : 0, id === "flipV" ? H : 0); ctx.scale(id === "flipH" ? -1 : 1, id === "flipV" ? -1 : 1); ctx.drawImage(copy, 0, 0); ctx.restore(); pushUndo(active.id, before); render();
+    }
+  }
 
   return (
     <div className="fixed inset-0 overflow-hidden touch-none">
@@ -472,9 +496,10 @@ export function DrawingApp() {
       </div>
 
       {/* Top bar */}
-      <div className="pointer-events-none absolute inset-x-0 top-2.5 flex justify-center px-3">
-        <div className="glass pointer-events-auto flex w-full items-center gap-0.5 overflow-x-auto rounded-full p-1 [scrollbar-width:none]">
-          <DropdownMenu>
+      <ToolShelf activeTool={tool} onActivate={activateShelf} title={title} onTitleChange={setTitle} onOpen={() => setPanel(null)}
+        color={<Button variant="ghost" onClick={() => setPanel(panel === "color" ? null : "color")} aria-label="Color" title="Color" className="mx-1 size-5 shrink-0 rounded-full border border-foreground/60 p-0" style={{ background: color }} />}
+        trailing={<><Button variant="ghost" size="icon" className="size-8 rounded-full" onClick={doUndo} disabled={!undo.current.length} aria-label="Undo" title="Undo"><Undo2 size={16} /></Button><Button variant="ghost" size="icon" className="size-8 rounded-full" onClick={doRedo} disabled={!redo.current.length} aria-label="Redo" title="Redo"><Redo2 size={16} /></Button><div className={DIV} /><Button variant="ghost" size="icon" className={`size-8 rounded-full ${panel === "layers" ? "bg-accent" : ""}`} onClick={() => setPanel(panel === "layers" ? null : "layers")} aria-label="Layers" title="Layers"><Layers size={16} /></Button></>}
+        leading={<DropdownMenu>
             <DropdownMenuTrigger className="flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-[13px] font-semibold outline-none transition-colors hover:bg-accent data-[state=open]:bg-accent">
               Files <ChevronDown size={13} className="opacity-70" />
             </DropdownMenuTrigger>
@@ -495,24 +520,7 @@ export function DrawingApp() {
               <DropdownMenuSeparator className={MS} />
               <DropdownMenuItem className={MI} disabled>View Timelapse<span className={SOON}>Soon</span></DropdownMenuItem>
             </DropdownMenuContent>
-          </DropdownMenu>
-          <div className={DIV} />
-          {TOOLS.map((t, i) => (
-            <Fragment key={t.id}>
-              <button title={t.label} aria-label={t.label} aria-pressed={tool === t.id} className={`${TB} ${tool === t.id ? "tool-btn-active" : ""}`} onClick={() => pickTool(t.id)}><t.icon size={16} /></button>
-              {i === 0 && (
-                <button onClick={() => setPanel(panel === "color" ? null : "color")} aria-label="Color" title="Color"
-                  className="mx-1 size-5 shrink-0 rounded-full border border-foreground/60 shadow-inner transition-transform active:scale-90" style={{ background: color }} />
-              )}
-            </Fragment>
-          ))}
-          <div className="flex-1" />
-          <button className={TB} onClick={doUndo} disabled={!undo.current.length} aria-label="Undo" title="Undo"><Undo2 size={16} /></button>
-          <button className={TB} onClick={doRedo} disabled={!redo.current.length} aria-label="Redo" title="Redo"><Redo2 size={16} /></button>
-          <div className={DIV} />
-          <button className={`${TB} ${panel === "layers" ? "bg-accent" : ""}`} onClick={() => setPanel(panel === "layers" ? null : "layers")} aria-label="Layers" title="Layers"><Layers size={16} /></button>
-        </div>
-      </div>
+          </DropdownMenu>} />
 
       {panel === "color" && (
         <ColorPicker color={color} recent={recentColors} onChange={setColor} onCommit={(c) => setRecentColors((recent) => rememberColor(recent, c))} onClose={() => setPanel(null)} />
