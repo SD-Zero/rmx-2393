@@ -96,7 +96,7 @@
 @utility ants { animation: ants .8s linear infinite; }
 
 .color-panel { width: min(288px, calc(100vw - 24px)); max-height: calc(100dvh - 80px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; }
-.color-wheel { position: relative; width: 100%; aspect-ratio: 1; touch-action: none; }
+.color-wheel { position: relative; width: clamp(160px, calc(100dvh - 410px), 254px); max-width: 100%; aspect-ratio: 1; touch-action: none; }
 .hue-ring { background: var(--picker-spectrum); cursor: crosshair; touch-action: none; }
 .hue-ring::before { content: ""; position: absolute; inset: 12%; border-radius: 50%; background: var(--background); }
 .color-square { inset: 23%; background: linear-gradient(to top, var(--picker-black), var(--picker-clear)), linear-gradient(to right, var(--picker-white), var(--picker-clear)), var(--picker-hue); touch-action: none; cursor: crosshair; }
