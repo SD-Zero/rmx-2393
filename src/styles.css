@@ -102,3 +102,9 @@
 .color-square { inset: 23%; background: linear-gradient(to top, var(--picker-black), var(--picker-clear)), linear-gradient(to right, var(--picker-white), var(--picker-clear)), var(--picker-hue); touch-action: none; cursor: crosshair; }
 .color-handle { position: absolute; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--picker-white); box-shadow: var(--picker-handle-shadow); transform: translate(-50%, -50%); pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .animate-pop { animation: none; } }
+.shelf-bar { display: grid; grid-template-columns: minmax(0, 1fr) 160px minmax(0, 1fr); align-items: center; gap: 8px; }
+.shelf-pin { opacity: 0; }
+[data-shelf-item]:hover .shelf-pin, [data-shelf-item]:focus-within .shelf-pin { opacity: 1; }
+@media (hover: none) { .shelf-pin { opacity: .7; } }
+@media (max-width: 700px) { .shelf-bar { grid-template-columns: minmax(0, 1fr) 105px auto; gap: 2px; } }
+@media (max-width: 440px) { .shelf-bar { grid-template-columns: minmax(0, 1fr) 82px auto; } .shelf-bar > div:last-child { gap: 0; } .shelf-bar > div:last-child button { width: 26px; } }

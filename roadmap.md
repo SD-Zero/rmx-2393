@@ -1,0 +1,3 @@
+- [x] Add editable artwork title and named exports/project reopening.
+- [x] Add scrollable tool drawer and mouse/touch/keyboard toolbar customization.
+- [x] Remember tool placement in browser storage and verify behavior and smaller screens.
