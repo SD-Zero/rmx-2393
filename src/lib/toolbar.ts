@@ -1,8 +1,16 @@
-import { Brush, PaintBucket, Eraser, Lasso, Move, Droplet, Pointer, Hand, Pipette, Scan, RotateCcw, FlipHorizontal2, FlipVertical2, Copy, SquareDashed, Trash2, Plus, ImagePlus, Download, type LucideIcon } from "lucide-react";
+import { Brush, PaintBucket, Eraser, Lasso, Move, Droplet, Pointer, Hand, Pipette, Scan, RotateCcw, FlipHorizontal2, FlipVertical2, Copy, SquareDashed, Trash2, Plus, ImagePlus, Download, Folder, Type, Ellipsis, Undo2, Redo2, Layers, Circle, type LucideIcon } from "lucide-react";
 
 export type Tool = "brush" | "bucket" | "eraser" | "lasso" | "transform" | "blur" | "smudge" | "hand" | "eyedropper";
-export type ToolItem = { id: string; label: string; icon: LucideIcon; tool?: Tool };
+export type ToolItem = { id: string; label: string; icon: LucideIcon; tool?: Tool; slots?: number };
+export const REARRANGE_HOLD_MS = 2000;
 export const TOOL_ITEMS: ToolItem[] = [
+  { id: "files", label: "Files", icon: Folder, slots: 2 },
+  { id: "title", label: "Artwork title", icon: Type, slots: 4 },
+  { id: "more", label: "More tools", icon: Ellipsis },
+  { id: "undo", label: "Undo", icon: Undo2 },
+  { id: "redo", label: "Redo", icon: Redo2 },
+  { id: "color", label: "Color", icon: Circle },
+  { id: "layers", label: "Layers", icon: Layers },
   { id: "brush", label: "Brush", icon: Brush, tool: "brush" },
   { id: "bucket", label: "Paint bucket", icon: PaintBucket, tool: "bucket" },
   { id: "eraser", label: "Eraser", icon: Eraser, tool: "eraser" },
@@ -23,8 +31,12 @@ export const TOOL_ITEMS: ToolItem[] = [
   { id: "import", label: "Import image", icon: ImagePlus },
   { id: "export", label: "Export PNG", icon: Download },
 ];
-export const DEFAULT_TOOLBAR = ["brush", "bucket", "eraser", "lasso", "transform", "blur", "smudge"];
-export const TOOLBAR_KEY = "glass-canvas.toolbar.v1";
+export const DEFAULT_TOOLBAR = ["files", "brush", "bucket", "eraser", "lasso", "transform", "blur", "smudge", "title", "more", "undo", "redo", "color", "layers"];
+export const TOOLBAR_KEY = "glass-canvas.toolbar.v2";
+export const LEGACY_TOOLBAR_KEY = "glass-canvas.toolbar.v1";
+export function toolbarSlots(id: string): number { return TOOL_ITEMS.find((item) => item.id === id)?.slots ?? 1; }
+export function emptyToolbarSlots(items: string[], capacity: number): number { return Math.max(0, capacity - items.reduce((total, id) => total + toolbarSlots(id), 0)); }
+export function migrateToolbar(value: unknown): string[] { return ["files", ...validateToolbar(value).filter((id) => !["files", "title", "more", "undo", "redo", "color", "layers"].includes(id)), "title", "more", "undo", "redo", "color", "layers"]; }
 export function validateToolbar(value: unknown): string[] {
   return Array.isArray(value) ? [...new Set(value.filter((id): id is string => typeof id === "string" && TOOL_ITEMS.some((t) => t.id === id)))] : [...DEFAULT_TOOLBAR];
 }
