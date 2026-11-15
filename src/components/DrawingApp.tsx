@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Brush, PaintBucket, Eraser, Lasso, Move, Droplet, Pointer, Undo2, Redo2, Layers, Trash2, Plus, Eye, EyeOff, Lock, LockOpen } from "lucide-react";
+import { Undo2, Redo2, Layers, Lock, LockOpen } from "lucide-react";
+import { LayersPanel, type LayerAction } from "./LayersPanel";
+import { children, defaultProps, descendantIds, insertAbove, isLocked, isShown, moveNode, removeNode, siblingBelow, wrapInFolder, type DropWhere, type NodeProps } from "@/lib/layerTree";
 import { floodMask, smudgeStart, smudgeDab, type Smudge } from "@/lib/paintOps";
 import { ChevronDown } from "lucide-react";
 import { VerticalSlider } from "./VerticalSlider";
@@ -11,7 +13,10 @@ import { ToolShelf } from "./ToolShelf";
 import { Button } from "@/components/ui/button";
 import { TOOL_ITEMS, artworkFilename, artworkName, type Tool } from "@/lib/toolbar";
 
-type Layer = { id: number; name: string; visible: boolean; canvas: HTMLCanvasElement };
+type Layer = NodeProps & { kind: "layer"; canvas: HTMLCanvasElement };
+type FolderNode = NodeProps & { kind: "folder"; canvas?: undefined };
+type Node = Layer | FolderNode;
+type Entry = { pixels: { id: number; data: ImageData }[]; nodes?: Node[]; active?: number };
 type Pt = { x: number; y: number; p: number };
 
 const W = 2048, H = 1536;
@@ -28,15 +33,13 @@ const TB = "tool-btn size-8";
 const SOON = "ml-auto text-xs text-muted-foreground";
 
 let nextId = 1;
-const makeLayer = (name: string): Layer => {
-  const c = document.createElement("canvas"); c.width = W; c.height = H;
-  return { id: nextId++, name, visible: true, canvas: c };
-};
+const makeLayer = (name: string): Layer => ({ ...defaultProps(), id: nextId++, kind: "layer", name, canvas: mkCanvas(W, H) });
+const makeFolder = (name: string): FolderNode => ({ ...defaultProps(), id: nextId++, kind: "folder", name });
 
 export function DrawingApp() {
   const viewRef = useRef<HTMLCanvasElement>(null);
   const strokeRef = useRef<HTMLCanvasElement | null>(null);
-  const [layers, setLayers] = useState<Layer[]>([]);
+  const [layers, setLayers] = useState<Node[]>([]);
   const [activeId, setActiveId] = useState(0);
   const [tool, setTool] = useState<Tool>("brush");
   const [title, setTitle] = useState("Untitled");
@@ -53,9 +56,9 @@ export function DrawingApp() {
   const [zoomLock, setZoomLock] = useState(false);
   const [rotLock, setRotLock] = useState(false);
   const tap = useRef<{ t: number; max: number; moved: boolean; starts: Map<number, { x: number; y: number }> } | null>(null);
-  const undo = useRef<{ id: number; data: ImageData }[]>([]);
-  const redo = useRef<{ id: number; data: ImageData }[]>([]);
-  const [, force] = useState(0);
+  const undo = useRef<Entry[]>([]);
+  const redo = useRef<Entry[]>([]);
+  const [rev, force] = useState(0);
   type SmudgeRun = { s: Smudge; work: ImageData; clip: Uint8Array | null; dirty: [number, number, number, number] | null };
   const drawing = useRef<{ pts: Pt[]; layer: Layer; before: ImageData; direct: boolean; sm?: SmudgeRun } | null>(null);
   const [sel, setSel] = useState<P2[] | null>(null);
@@ -87,13 +90,7 @@ export function DrawingApp() {
     const v = viewRef.current; if (!v) return;
     flushSmudge();
     const ctx = v.getContext("2d")!; ctx.clearRect(0, 0, W, H);
-    for (const l of layers) {
-      if (!l.visible) continue;
-      if (drawing.current && !drawing.current.direct && drawing.current.layer.id === l.id && strokeRef.current) {
-        const tmp = composeLive(l); ctx.drawImage(tmp, 0, 0);
-      } else ctx.drawImage(l.canvas, 0, 0);
-      const t = xf.current; if (t && t.layer.id === l.id) ctx.drawImage(t.float, t.dx, t.dy);
-    }
+    drawGroup(ctx, layers, null, 0);
   }, [layers, tool, opacity, sel]);
   // Only repaint when layers change — not on every slider tick.
   const renderLatest = useRef(render); renderLatest.current = render;
@@ -116,12 +113,47 @@ export function DrawingApp() {
     return c.path;
   }
 
+  // Composites one folder level: folders render into their own buffer, clipping masks are cut to their base layer's pixels.
+  const groupBufs = useRef<HTMLCanvasElement[]>([]);
+  const clipBuf = useRef<HTMLCanvasElement | null>(null), xfBuf = useRef<HTMLCanvasElement | null>(null);
+  function layerSource(l: Layer): HTMLCanvasElement {
+    if (drawing.current && !drawing.current.direct && drawing.current.layer.id === l.id && strokeRef.current) return composeLive(l);
+    const t = xf.current;
+    if (t && t.layer.id === l.id) {
+      const b = (xfBuf.current ??= mkCanvas(W, H)), c = b.getContext("2d")!;
+      c.globalCompositeOperation = "copy"; c.drawImage(l.canvas, 0, 0); c.globalCompositeOperation = "source-over"; c.drawImage(t.float, t.dx, t.dy); return b;
+    }
+    return l.canvas;
+  }
+  function paintNode(ctx: CanvasRenderingContext2D, src: HTMLCanvasElement, n: Node) {
+    ctx.save(); ctx.globalAlpha = n.opacity / 100; ctx.globalCompositeOperation = n.blend; ctx.drawImage(src, 0, 0); ctx.restore();
+  }
+  function drawGroup(ctx: CanvasRenderingContext2D, all: Node[], parent: number | null, depth: number) {
+    let base: { visible: boolean; src: HTMLCanvasElement } | null = null;
+    for (const n of children(all, parent)) {
+      if (n.kind === "layer" && n.clip && base) {
+        if (!base.visible || !n.visible) continue;
+        const b = (clipBuf.current ??= mkCanvas(W, H)), c = b.getContext("2d")!;
+        c.globalCompositeOperation = "copy"; c.drawImage(layerSource(n), 0, 0);
+        c.globalCompositeOperation = "destination-in"; c.drawImage(base.src, 0, 0); c.globalCompositeOperation = "source-over";
+        paintNode(ctx, b, n); continue;
+      }
+      if (n.kind === "folder") {
+        base = null; if (!n.visible) continue;
+        const g = (groupBufs.current[depth] ??= mkCanvas(W, H)), gc = g.getContext("2d")!; gc.clearRect(0, 0, W, H);
+        drawGroup(gc, all, n.id, depth + 1); paintNode(ctx, g, n); continue;
+      }
+      const src = layerSource(n); base = { visible: n.visible, src };
+      if (n.visible) paintNode(ctx, src, n);
+    }
+  }
+
   const liveBuf = useRef<HTMLCanvasElement | null>(null);
   function composeLive(l: Layer) {
     if (!liveBuf.current) { liveBuf.current = document.createElement("canvas"); liveBuf.current.width = W; liveBuf.current.height = H; }
     const c = liveBuf.current.getContext("2d")!;
     c.globalCompositeOperation = "copy"; c.globalAlpha = 1; c.drawImage(l.canvas, 0, 0);
-    c.globalCompositeOperation = tool === "eraser" ? "destination-out" : "source-over";
+    c.globalCompositeOperation = tool === "eraser" ? "destination-out" : l.alphaLock ? "source-atop" : "source-over";
     c.save(); const clip = selClip(); if (clip) c.clip(clip);
     c.globalAlpha = opacity / 100; c.drawImage(strokeRef.current!, 0, 0); c.restore();
     c.globalCompositeOperation = "source-over"; c.globalAlpha = 1;
@@ -207,10 +239,13 @@ export function DrawingApp() {
     let prev = a;
     for (let i = 1; i <= n; i++) { const q = { x: a.x + ((b.x - a.x) * i) / n, y: a.y + ((b.y - a.y) * i) / n }; dab(l, prev, q); prev = q; }
   }
-  function pushUndo(id: number, data: ImageData) {
-    undo.current.push({ id, data }); if (undo.current.length > 40) undo.current.shift();
+  function pushEntry(e: Entry) {
+    undo.current.push(e); if (undo.current.length > 40) undo.current.shift();
     redo.current = []; force((n) => n + 1);
   }
+  const pushUndo = (id: number, data: ImageData) => pushEntry({ pixels: [{ id, data }] });
+  /** Undo point for changes to the layer list itself (plus any pixels it rewrites). */
+  const snapshot = (pixels: Entry["pixels"] = []): Entry => ({ pixels, nodes: layers, active: activeId });
   function bucket(l: Layer, p: P2) {
     const ctx = l.canvas.getContext("2d")!, before = ctx.getImageData(0, 0, W, H);
     const m = floodMask(before.data, W, H, Math.floor(p.x), Math.floor(p.y));
@@ -219,7 +254,7 @@ export function DrawingApp() {
     for (let i = 0; i < m.length; i++) if (m[i]) { const j = i * 4; fd[j] = r; fd[j + 1] = g; fd[j + 2] = b; fd[j + 3] = 255; any = true; }
     if (!any) return;
     const tmp = mkCanvas(W, H); tmp.getContext("2d")!.putImageData(fill, 0, 0);
-    ctx.save(); if (sel) ctx.clip(selPath(sel)); ctx.globalAlpha = opacity / 100; ctx.drawImage(tmp, 0, 0); ctx.restore();
+    ctx.save(); if (sel) ctx.clip(selPath(sel)); ctx.globalAlpha = opacity / 100; if (l.alphaLock) ctx.globalCompositeOperation = "source-atop"; ctx.drawImage(tmp, 0, 0); ctx.restore();
     pushUndo(l.id, before); render();
   }
   function startTransform(l: Layer, p: P2) {
@@ -246,7 +281,8 @@ export function DrawingApp() {
     setTool(id);
   }
 
-  const active = layers.find((l) => l.id === activeId);
+  const activeNode = layers.find((l) => l.id === activeId);
+  const active = activeNode?.kind === "layer" ? activeNode : undefined;
 
   function onDown(e: React.PointerEvent) {
     setPanel(null);
@@ -275,7 +311,7 @@ export function DrawingApp() {
       }
       return;
     }
-    if (!active || !active.visible) return;
+    if (!active || !isShown(layers, active.id) || isLocked(layers, active.id)) return;
     const p = toCanvas(e), pr = e.pointerType === "pen" ? e.pressure || 0.5 : 0.5;
     if (tool === "lasso") { lasso.current = [p]; setLassoPts([p]); return; }
     if (tool === "bucket") { bucket(active, p); return; }
@@ -360,10 +396,17 @@ export function DrawingApp() {
     if (!d.direct) {
       const ctx = d.layer.canvas.getContext("2d")!;
       ctx.save(); if (sel) ctx.clip(selPath(sel));
-      ctx.globalAlpha = opacity / 100; ctx.globalCompositeOperation = tool === "eraser" ? "destination-out" : "source-over";
+      ctx.globalAlpha = opacity / 100; ctx.globalCompositeOperation = tool === "eraser" ? "destination-out" : d.layer.alphaLock ? "source-atop" : "source-over";
       ctx.drawImage(strokeRef.current!, 0, 0); ctx.restore();
     }
-    flushSmudge(); pushUndo(d.layer.id, d.before); cancelStroke(); render();
+    flushSmudge();
+    if (d.direct && d.layer.alphaLock) {
+      // Alpha lock: blur/smudge may recolor pixels but never change where the layer has paint.
+      const ctx = d.layer.canvas.getContext("2d")!, now = ctx.getImageData(0, 0, W, H);
+      for (let i = 3; i < now.data.length; i += 4) now.data[i] = d.before.data[i]!;
+      ctx.putImageData(now, 0, 0);
+    }
+    pushUndo(d.layer.id, d.before); cancelStroke(); render();
   }
   function wheel(e: WheelEvent) {
     e.preventDefault();
@@ -384,10 +427,13 @@ export function DrawingApp() {
 
   function history(from: typeof undo, to: typeof undo) {
     const h = from.current.pop(); if (!h) return;
-    const l = layers.find((x) => x.id === h.id); if (!l) return;
-    const ctx = l.canvas.getContext("2d")!;
-    to.current.push({ id: h.id, data: ctx.getImageData(0, 0, W, H) });
-    ctx.putImageData(h.data, 0, 0); render(); force((n) => n + 1);
+    const pool = [...layers, ...(h.nodes ?? [])];
+    const canvasOf = (id: number) => pool.find((x): x is Layer => x.id === id && x.kind === "layer")?.canvas;
+    const pixels = h.pixels.filter((p) => canvasOf(p.id));
+    to.current.push({ pixels: pixels.map((p) => ({ id: p.id, data: canvasOf(p.id)!.getContext("2d")!.getImageData(0, 0, W, H) })), ...(h.nodes ? { nodes: layers, active: activeId } : {}) });
+    for (const p of pixels) canvasOf(p.id)!.getContext("2d")!.putImageData(p.data, 0, 0);
+    if (h.nodes) { setLayers(h.nodes); if (h.active !== undefined) setActiveId(h.active); }
+    render(); force((n) => n + 1);
   }
   const doUndo = () => history(undo, redo), doRedo = () => history(redo, undo);
   useEffect(() => {
@@ -402,15 +448,11 @@ export function DrawingApp() {
     addEventListener("keydown", k); return () => removeEventListener("keydown", k);
   });
 
-  function clearLayer() {
-    if (!active) return; const ctx = active.canvas.getContext("2d")!;
-    undo.current.push({ id: active.id, data: ctx.getImageData(0, 0, W, H) }); ctx.clearRect(0, 0, W, H); render(); force((n) => n + 1);
-  }
   const download = (href: string, name: string) => { const a = document.createElement("a"); a.download = name; a.href = href; a.click(); };
   function flatten(bg?: string) {
     const c = document.createElement("canvas"); c.width = W; c.height = H; const ctx = c.getContext("2d")!;
     if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H); }
-    for (const l of layers) if (l.visible) ctx.drawImage(l.canvas, 0, 0);
+    drawGroup(ctx, layers, null, 0);
     return c;
   }
   const exportPng = () => download(flatten().toDataURL("image/png"), artworkFilename(title, "png"));
@@ -419,7 +461,9 @@ export function DrawingApp() {
     const doc: IsDoc = { format: "glass-canvas", version: IS_VERSION, width: W, height: H, title: artworkName(title),
       activeIndex: Math.max(0, layers.findIndex((l) => l.id === activeId)),
       brush: { tool, color, size, opacity },
-      layers: layers.map((l) => ({ name: l.name, visible: l.visible, png: l.canvas.toDataURL("image/png") })) };
+      layers: layers.map((l) => ({ name: l.name, visible: l.visible, kind: l.kind, parent: l.parent === null ? null : layers.findIndex((x) => x.id === l.parent),
+        opacity: l.opacity, blend: l.blend, locked: l.locked, alphaLock: l.alphaLock, clip: l.clip, collapsed: l.collapsed,
+        ...(l.kind === "layer" ? { png: l.canvas.toDataURL("image/png") } : {}) })) };
     const url = URL.createObjectURL(new Blob([JSON.stringify(doc)], { type: "application/json" }));
     download(url, artworkFilename(title, "is")); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -438,9 +482,13 @@ export function DrawingApp() {
     try {
       const doc = parseIsFile(await f.text());
       setTitle(typeof doc.title === "string" ? artworkName(doc.title) : "Untitled");
-      const next = await Promise.all(doc.layers.map(async (d) => {
-        const l = makeLayer(d.name); l.visible = d.visible !== false;
-        l.canvas.getContext("2d")!.drawImage(await loadImg(d.png), 0, 0, W, H); return l;
+      const ids = doc.layers.map(() => nextId++);
+      const next = await Promise.all(doc.layers.map(async (d, i): Promise<Node> => {
+        const props = { ...defaultProps(), id: ids[i]!, name: d.name, visible: d.visible !== false, parent: d.parent == null ? null : ids[d.parent]!,
+          opacity: d.opacity ?? 100, blend: d.blend ?? "source-over", locked: !!d.locked, alphaLock: !!d.alphaLock, clip: !!d.clip, collapsed: !!d.collapsed };
+        if (d.kind === "folder") return { ...props, kind: "folder" };
+        const l: Layer = { ...props, kind: "layer", canvas: mkCanvas(W, H) };
+        l.canvas.getContext("2d")!.drawImage(await loadImg(d.png!), 0, 0, W, H); return l;
       }));
       setLayers(next); setActiveId(next[doc.activeIndex]!.id);
       const b = doc.brush;
@@ -469,17 +517,78 @@ export function DrawingApp() {
     if (id === "fit") { fit(); return; }
     if (id === "resetRotation") { const v = viewNow.current, p = toWorld(innerWidth / 2, innerHeight / 2); setView(anchor(p.x, p.y, innerWidth / 2, innerHeight / 2, v.s, 0)); return; }
     if (id === "deselect") { setSel(null); return; }
-    if (id === "clear") { clearLayer(); return; }
     if (id === "import") { importImage(); return; }
     if (id === "export") { exportPng(); return; }
-    if (id === "addLayer") { const l = makeLayer(`Layer ${layers.length}`); setLayers((ls) => [...ls, l]); setActiveId(l.id); return; }
-    if (!active) return;
-    if (id === "duplicate") { const l = makeLayer(`${active.name} copy`); l.canvas.getContext("2d")?.drawImage(active.canvas, 0, 0); setLayers((ls) => [...ls, l]); setActiveId(l.id); return; }
-    if (id === "flipH" || id === "flipV") {
-      const ctx = active.canvas.getContext("2d"); if (!ctx) return;
-      const before = ctx.getImageData(0, 0, W, H), copy = mkCanvas(W, H); copy.getContext("2d")?.drawImage(active.canvas, 0, 0);
-      ctx.save(); ctx.clearRect(0, 0, W, H); ctx.translate(id === "flipH" ? W : 0, id === "flipV" ? H : 0); ctx.scale(id === "flipH" ? -1 : 1, id === "flipV" ? -1 : 1); ctx.drawImage(copy, 0, 0); ctx.restore(); pushUndo(active.id, before); render();
+  }
+
+  function patchNode(id: number, patch: Partial<NodeProps>) { setLayers((ls) => ls.map((n) => (n.id === id ? ({ ...n, ...patch } as Node) : n))); }
+  function moveLayer(id: number, target: number, where: DropWhere) {
+    const next = moveNode(layers, id, target, where); if (!next) return;
+    pushEntry(snapshot()); setLayers(next.map((x) => (where === "into" && x.id === target ? { ...x, collapsed: false } : x)));
+  }
+  function layerAction(a: LayerAction, id: number) {
+    const n = layers.find((x) => x.id === id);
+    if (a === "add") {
+      const l = makeLayer(`Layer ${layers.filter((x) => x.kind === "layer").length}`);
+      pushEntry(snapshot());
+      setLayers(n?.kind === "folder" ? [...layers.map((x) => (x.id === n.id ? { ...x, collapsed: false } : x)), { ...l, parent: n.id }] : insertAbove<Node>(layers, l, n?.id ?? null));
+      setActiveId(l.id); return;
     }
+    if (a === "addFolder") {
+      const f = makeFolder(`Folder ${layers.filter((x) => x.kind === "folder").length + 1}`);
+      pushEntry(snapshot()); setLayers(n ? wrapInFolder<Node>(layers, f, n.id) : [...layers, f]); setActiveId(f.id); return;
+    }
+    if (!n) return;
+    if (a === "duplicate") {
+      const inside = descendantIds(layers, n.id), group = layers.filter((x) => x.id === n.id || inside.has(x.id));
+      const ids = new Map(group.map((x) => [x.id, nextId++]));
+      const clones = group.map((x): Node => {
+        const props = { ...x, id: ids.get(x.id)!, parent: x.id === n.id ? x.parent : ids.get(x.parent!)!, name: x.id === n.id ? `${x.name} copy` : x.name };
+        if (x.kind === "folder") return { ...props, kind: "folder", canvas: undefined };
+        const c = mkCanvas(W, H); c.getContext("2d")!.drawImage(x.canvas, 0, 0); return { ...props, kind: "layer", canvas: c };
+      });
+      const i = layers.indexOf(n);
+      pushEntry(snapshot()); setLayers([...layers.slice(0, i + 1), ...clones, ...layers.slice(i + 1)]); setActiveId(ids.get(n.id)!); return;
+    }
+    if (a === "delete") {
+      const rest = removeNode(layers, n.id); if (!rest.some((x) => x.kind === "layer") || isLocked(layers, n.id)) return;
+      const next = siblingBelow(layers, n.id) ?? layers.find((x) => x.id === n.parent) ?? [...rest].reverse().find((x) => x.kind === "layer")!;
+      pushEntry(snapshot()); setLayers(rest); setActiveId(next.id); return;
+    }
+    if (a === "flatten") {
+      if (n.kind !== "folder" || isLocked(layers, n.id)) return;
+      const l: Layer = { ...makeLayer(n.name), parent: n.parent, visible: n.visible, opacity: n.opacity, blend: n.blend };
+      drawGroup(l.canvas.getContext("2d")!, layers, n.id, 0);
+      const inside = descendantIds(layers, n.id);
+      pushEntry(snapshot()); setLayers(layers.filter((x) => !inside.has(x.id)).map((x) => (x.id === n.id ? l : x))); setActiveId(l.id); return;
+    }
+    if (n.kind !== "layer" || isLocked(layers, n.id)) return;
+    const ctx = n.canvas.getContext("2d")!, before = ctx.getImageData(0, 0, W, H);
+    if (a === "mergeDown") {
+      const below = siblingBelow(layers, n.id);
+      if (!below || below.kind !== "layer" || isLocked(layers, below.id)) return;
+      const bctx = below.canvas.getContext("2d")!, belowBefore = bctx.getImageData(0, 0, W, H);
+      const out = mkCanvas(W, H), oc = out.getContext("2d")!;
+      oc.globalAlpha = below.opacity / 100; oc.drawImage(below.canvas, 0, 0);
+      let src = n.canvas;
+      if (n.clip && !below.clip) { src = mkCanvas(W, H); const sc = src.getContext("2d")!; sc.drawImage(n.canvas, 0, 0); sc.globalCompositeOperation = "destination-in"; sc.drawImage(below.canvas, 0, 0); }
+      oc.globalAlpha = n.opacity / 100; oc.globalCompositeOperation = n.blend; oc.drawImage(src, 0, 0);
+      pushEntry(snapshot([{ id: below.id, data: belowBefore }]));
+      bctx.globalCompositeOperation = "copy"; bctx.drawImage(out, 0, 0); bctx.globalCompositeOperation = "source-over";
+      setLayers(layers.filter((x) => x.id !== n.id).map((x) => (x.id === below.id ? { ...x, opacity: 100 } : x))); setActiveId(below.id); return;
+    }
+    if (a === "clear") ctx.clearRect(0, 0, W, H);
+    if (a === "invert") {
+      const inv = new ImageData(new Uint8ClampedArray(before.data), W, H), d = inv.data;
+      for (let i = 0; i < d.length; i += 4) { d[i] = 255 - d[i]!; d[i + 1] = 255 - d[i + 1]!; d[i + 2] = 255 - d[i + 2]!; }
+      if (!sel) ctx.putImageData(inv, 0, 0);
+      else { const t = mkCanvas(W, H); t.getContext("2d")!.putImageData(inv, 0, 0); ctx.save(); ctx.clip(selPath(sel)); ctx.clearRect(0, 0, W, H); ctx.drawImage(t, 0, 0); ctx.restore(); }
+    }
+    if (a === "flipH" || a === "flipV") {
+      const copy = mkCanvas(W, H); copy.getContext("2d")!.drawImage(n.canvas, 0, 0);
+      ctx.save(); ctx.clearRect(0, 0, W, H); ctx.translate(a === "flipH" ? W : 0, a === "flipV" ? H : 0); ctx.scale(a === "flipH" ? -1 : 1, a === "flipV" ? -1 : 1); ctx.drawImage(copy, 0, 0); ctx.restore();
+    }
+    pushUndo(n.id, before); render();
   }
 
   return (
@@ -532,31 +641,7 @@ export function DrawingApp() {
       )}
 
       {panel === "layers" && (
-        <div className="glass-strong animate-pop absolute right-1/2 top-16 w-72 translate-x-1/2 rounded-3xl p-3 sm:right-6 sm:translate-x-0">
-          <div className="mb-2 flex items-center justify-between px-1">
-            <p className="text-sm font-semibold">Layers</p>
-            <div className="flex">
-              <button className="tool-btn size-8" aria-label="Clear layer" onClick={clearLayer}><Trash2 size={16} /></button>
-              <button className="tool-btn size-8" aria-label="Add layer" onClick={() => { const l = makeLayer(`Layer ${layers.length}`); setLayers([...layers, l]); setActiveId(l.id); }}><Plus size={16} /></button>
-            </div>
-          </div>
-          <div className="flex max-h-80 flex-col gap-1.5 overflow-y-auto">
-            {[...layers].reverse().map((l) => (
-              <div key={l.id} onClick={() => setActiveId(l.id)} className={`flex cursor-pointer items-center gap-3 rounded-2xl p-2 transition-colors ${l.id === activeId ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-accent"}`}>
-                <div className="checker h-10 w-14 overflow-hidden rounded-lg">
-                  <LayerThumb canvas={l.canvas} tick={undo.current.length} />
-                </div>
-                <span className="flex-1 truncate text-sm font-medium">{l.name}</span>
-                <button className="p-1" aria-label="Toggle visibility" onClick={(e) => { e.stopPropagation(); setLayers(layers.map((x) => x.id === l.id ? { ...x, visible: !x.visible } : x)); }}>
-                  {l.visible ? <Eye size={16} /> : <EyeOff size={16} className="opacity-50" />}
-                </button>
-                {layers.length > 1 && l.id === activeId && (
-                  <button className="p-1" aria-label="Delete layer" onClick={(e) => { e.stopPropagation(); const rest = layers.filter((x) => x.id !== l.id); setLayers(rest); setActiveId(rest[rest.length - 1]!.id); undo.current = undo.current.filter((u) => u.id !== l.id); }}><Trash2 size={16} /></button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+        <LayersPanel nodes={layers} activeId={activeId} rev={rev} onSelect={setActiveId} onPatch={patchNode} onAction={layerAction} onMove={moveLayer} />
       )}
 
       {/* Left sliders */}
@@ -573,16 +658,10 @@ export function DrawingApp() {
         <button onClick={() => setRotLock(!rotLock)} aria-label="Lock rotation" className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 transition-colors ${rotLock ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}>
           {rotLock ? <Lock size={12} /> : <LockOpen size={12} />}{Math.round(view.r)}°
         </button>
-        <span className="px-2 text-muted-foreground">{active?.name}</span>
+        <span className="px-2 text-muted-foreground">{activeNode?.name}</span>
       </div>
     </div>
   );
-}
-
-function LayerThumb({ canvas, tick }: { canvas: HTMLCanvasElement; tick: number }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => { const c = ref.current!.getContext("2d")!; c.clearRect(0, 0, 112, 80); c.drawImage(canvas, 0, 0, 112, 80); }, [canvas, tick]);
-  return <canvas ref={ref} width={112} height={80} className="size-full" />;
 }
 
 function hexA(hex: string, a: number) {
