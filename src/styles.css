@@ -118,7 +118,7 @@
 .shelf-empty-slot { width: 32px; height: 32px; flex-shrink: 0; display: grid; place-items: center; }
 .shelf-empty-slot > span { width: 27px; height: 27px; border: 1px dashed var(--glass-border); border-radius: 50%; }
 .shelf-empty-slot[data-landing] > span { border: 1px solid var(--primary); background: color-mix(in oklab, var(--primary) 25%, transparent); }
-.shelf-landing { z-index: 5; display: flex; align-items: center; gap: 4px; pointer-events: none; }
+.shelf-landing { position: relative; z-index: 5; display: flex; align-items: center; gap: 4px; pointer-events: none; }
 .shelf-bar [data-shelf-item="files"] + [data-shelf-item="color"]::before { content: ""; position: absolute; top: 6px; bottom: 6px; left: -3px; width: 1px; background: var(--glass-border); }
 .shelf-drawer { max-height: calc(100dvh - 86px); display: flex; flex-direction: column; }
 .shelf-drawer > [data-drop-area] { min-height: 0; max-height: 360px; }
