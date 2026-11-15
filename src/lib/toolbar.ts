@@ -1,4 +1,4 @@
-import { Brush, PaintBucket, Eraser, Lasso, Move, Droplet, Pointer, Hand, Pipette, Scan, RotateCcw, FlipHorizontal2, FlipVertical2, Copy, SquareDashed, Trash2, Plus, ImagePlus, Download, Folder, Type, Ellipsis, Undo2, Redo2, Layers, Circle, type LucideIcon } from "lucide-react";
+import { Brush, PaintBucket, Eraser, Lasso, Move, Droplet, Pointer, Hand, Pipette, Scan, RotateCcw, SquareDashed, ImagePlus, Download, Folder, Type, Ellipsis, Undo2, Redo2, Layers, Circle, type LucideIcon } from "lucide-react";
 
 export type Tool = "brush" | "bucket" | "eraser" | "lasso" | "transform" | "blur" | "smudge" | "hand" | "eyedropper";
 export type ToolItem = { id: string; label: string; icon: LucideIcon; tool?: Tool; slots?: number };
@@ -22,12 +22,7 @@ export const TOOL_ITEMS: ToolItem[] = [
   { id: "eyedropper", label: "Eyedropper", icon: Pipette, tool: "eyedropper" },
   { id: "fit", label: "Fit canvas", icon: Scan },
   { id: "resetRotation", label: "Reset rotation", icon: RotateCcw },
-  { id: "flipH", label: "Flip horizontal", icon: FlipHorizontal2 },
-  { id: "flipV", label: "Flip vertical", icon: FlipVertical2 },
-  { id: "duplicate", label: "Duplicate layer", icon: Copy },
   { id: "deselect", label: "Deselect", icon: SquareDashed },
-  { id: "clear", label: "Clear layer", icon: Trash2 },
-  { id: "addLayer", label: "New layer", icon: Plus },
   { id: "import", label: "Import image", icon: ImagePlus },
   { id: "export", label: "Export PNG", icon: Download },
 ];
