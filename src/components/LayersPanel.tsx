@@ -54,7 +54,7 @@ function Row({ node, depth, active, drop, rev, renaming, nodes, onSelect, onPatc
       {active && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild><button className="p-1" aria-label="Layer options" onClick={(e) => e.stopPropagation()}><Ellipsis size={16} /></button></DropdownMenuTrigger>
-          <DropdownMenuContent align="end" sideOffset={6} className="glass-strong min-w-52 rounded-2xl border-glass-border p-1.5 text-foreground" onClick={(e) => e.stopPropagation()}>
+          <DropdownMenuContent align="end" sideOffset={6} className="glass-strong min-w-52 rounded-2xl border-glass-border p-1.5 text-foreground" onClick={(e) => e.stopPropagation()} onCloseAutoFocus={(e) => e.preventDefault()}>
             <DropdownMenuItem className={MI} onSelect={() => setTimeout(() => setRenaming(node.id), 0)}>Rename</DropdownMenuItem>
             <DropdownMenuItem className={MI} onSelect={() => onAction("duplicate", node.id)}>Duplicate</DropdownMenuItem>
             {folder
