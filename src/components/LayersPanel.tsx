@@ -112,7 +112,6 @@ export function LayersPanel({ nodes, activeId, rev, onSelect, onPatch, onAction,
         <div className="flex">
           <button className="tool-btn size-8" aria-label="New folder" title="New folder" onClick={() => onAction("addFolder", activeId)}><FolderPlus size={16} /></button>
           <button className="tool-btn size-8" aria-label="Add layer" title="New layer" onClick={() => onAction("add", activeId)}><Plus size={16} /></button>
-          <button className="tool-btn size-8" aria-label="Delete selected" title="Delete" onClick={() => onAction("delete", activeId)}><Trash2 size={16} /></button>
         </div>
       </div>
       <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={(e) => { setDragId(Number(e.active.id)); setDrop(null); }} onDragMove={where} onDragOver={where}
