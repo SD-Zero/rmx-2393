@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { artworkName, artworkFilename, DEFAULT_TOOLBAR, REARRANGE_HOLD_MS, emptyToolbarSlots, migrateToolbar, toolbarSlots, moveToolbarItem, validateToolbar } from "./toolbar";
+import { artworkName, artworkFilename, DEFAULT_TOOLBAR, REARRANGE_HOLD_MS, emptyToolbarSlots, migrateToolbar, toolbarSlots, moveToolbarItem, validateToolbar, placeToolbarItem, validatePlacements } from "./toolbar";
 describe("artwork and toolbar rules", () => {
+  it("places an item far right without filling the gap", () => { expect(placeToolbarItem([{ id: "brush", slot: 0 }], "color", 20)).toEqual([{ id: "brush", slot: 0 }, { id: "color", slot: 20 }]); });
+  it("leaves the original slots empty when removing or moving", () => { expect(placeToolbarItem([{ id: "files", slot: 0 }, { id: "brush", slot: 5 }], "files", null)).toEqual([{ id: "brush", slot: 5 }]); });
+  it("reserves all four title slots and shifts only overlapping items", () => { expect(placeToolbarItem([{ id: "brush", slot: 0 }, { id: "color", slot: 8 }], "title", 6)).toEqual([{ id: "brush", slot: 0 }, { id: "title", slot: 6 }, { id: "color", slot: 10 }]); });
+  it("restores gaps and accepts old saved toolbars", () => { expect(validatePlacements([{ id: "brush", slot: 0 }, { id: "color", slot: 20 }])).toEqual([{ id: "brush", slot: 0 }, { id: "color", slot: 20 }]); expect(validatePlacements(["files", "brush"])).toEqual([{ id: "files", slot: 0 }, { id: "brush", slot: 2 }]); });
   it("starts unnamed artwork as Untitled", () => { expect(artworkName("")).toBe("Untitled"); expect(artworkFilename("Sunset", "png")).toBe("Sunset.png"); });
   it("moves tools from the drawer into the toolbar", () => { expect(moveToolbarItem(["brush", "eraser"], "hand", "eraser")).toEqual(["brush", "hand", "eraser"]); });
   it("moves toolbar tools back into the drawer", () => { expect(moveToolbarItem(["brush", "eraser"], "eraser", "drawer")).toEqual(["brush"]); });
