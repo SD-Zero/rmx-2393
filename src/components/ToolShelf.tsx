@@ -6,18 +6,19 @@ import { Button } from "@/components/ui/button";
 import { DEFAULT_TOOLBAR, TOOLBAR_KEY, LEGACY_TOOLBAR_KEY, REARRANGE_HOLD_MS, TOOL_ITEMS, emptyToolbarSlots, migrateToolbar, toolbarSlots, moveToolbarItem, validateToolbar, type Tool, type ToolItem } from "@/lib/toolbar";
 
 type Props = { activeTool: Tool; onActivate: (id: string) => void; title: string; onTitleChange: (title: string) => void; controls: Record<string, ReactNode>; onOpen: () => void };
-function ShelfItem({ item, drawer, active, editing, activate, remove, children }: { item: ToolItem; drawer?: boolean; active: boolean; editing: boolean; activate: () => void; remove: () => void; children?: ReactNode }) {
+function ShelfItem({ item, drawer, active, editing, activate, remove, children, landing = 0 }: { item: ToolItem; drawer?: boolean; active: boolean; editing: boolean; activate: () => void; remove: () => void; children?: ReactNode; landing?: number }) {
   const { attributes, listeners, setNodeRef, isDragging } = useSortable({ id: item.id, disabled: !editing });
   return <div ref={setNodeRef} data-shelf-item={item.id} data-slots={toolbarSlots(item.id)} className={`shelf-item relative shrink-0 ${drawer ? "shelf-drawer-item" : `shelf-slots-${toolbarSlots(item.id)}`} ${editing ? "shelf-editing" : ""} ${isDragging ? "opacity-25" : ""}`}>
     <div {...(editing ? attributes : {})} {...(editing ? listeners : {})} aria-label={editing ? `Move ${item.label}` : undefined} className={`shelf-item-content ${editing ? "touch-none cursor-grab" : ""}`}>
       {editing ? <div className={`flex h-8 items-center justify-center gap-1 ${drawer ? "h-20 flex-col gap-2 text-[11px]" : ""}`}><item.icon size={18} />{(drawer || item.id === "files" || item.id === "title") && <span className="truncate">{item.id === "title" && children ? children : item.label}</span>}</div> : children ?? <Button variant="ghost" size={drawer ? "default" : "icon"} aria-label={item.label} title={item.label} aria-pressed={active} onClick={activate} className={`${drawer ? "h-20 w-full flex-col gap-2 rounded-lg px-1 text-[11px] whitespace-normal leading-tight" : "size-8 rounded-full"} ${active ? "bg-primary text-primary-foreground hover:bg-primary" : ""}`}><item.icon size={18} /><span className={drawer ? "" : "sr-only"}>{item.label}</span></Button>}
     </div>
+    {landing > 0 && <span className="shelf-landing" aria-hidden>{Array.from({ length: landing }, (_, i) => <span key={i} className="shelf-empty-slot" data-landing><span /></span>)}</span>}
     {editing && !drawer && <Button variant="ghost" size="icon" className="absolute -left-1 -top-1 z-10 size-4 rounded-full bg-glass-strong text-foreground" aria-label={`Remove ${item.label}`} title="Move to tools" onPointerDown={(e) => e.stopPropagation()} onClick={remove}><X className="size-3" /></Button>}
   </div>;
 }
 function DropArea({ id, children, className }: { id: string; children: ReactNode; className: string }) {
   const { setNodeRef, isOver } = useDroppable({ id });
-  return <div ref={setNodeRef} data-drop-area={id} className={`${className} ${isOver ? "bg-primary/15 ring-1 ring-primary" : ""}`}>{children}</div>;
+  return <div ref={setNodeRef} data-drop-area={id} className={`${className} ${isOver && id !== "toolbar" ? "bg-primary/15 ring-1 ring-primary" : ""}`}>{children}</div>;
 }
 export function ToolShelf({ activeTool, onActivate, title, onTitleChange, controls, onOpen }: Props) {
   const [items, setItems] = useState([...DEFAULT_TOOLBAR]);
@@ -25,6 +26,7 @@ export function ToolShelf({ activeTool, onActivate, title, onTitleChange, contro
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
   const [capacity, setCapacity] = useState(18);
   const root = useRef<HTMLDivElement>(null);
   const bar = useRef<HTMLDivElement>(null);
@@ -51,7 +53,7 @@ export function ToolShelf({ activeTool, onActivate, title, onTitleChange, contro
   }, [dragging]);
   function finish(e: DragEndEvent) {
     if (e.over) { const target = String(e.over.id); setItems((v) => moveToolbarItem(v, String(e.active.id), target === "drawer" || (!v.includes(target) && target !== "toolbar") ? "drawer" : target)); }
-    setDragging(null);
+    setDragging(null); setOver(null);
   }
   const drawer = TOOL_ITEMS.filter((t) => !items.includes(t.id));
   const dragged = TOOL_ITEMS.find((t) => t.id === dragging);
@@ -63,13 +65,13 @@ export function ToolShelf({ activeTool, onActivate, title, onTitleChange, contro
     return controls[id] ? <div className={`flex items-center justify-center ${inDrawer ? "h-20" : "h-8"}`} onClick={() => { if (inDrawer && id !== "files") setOpen(false); }}>{controls[id]}</div> : undefined;
   }
   return <div ref={root} className="pointer-events-none absolute inset-x-0 top-2.5 z-20 px-3" onPointerDownCapture={press} onPointerMoveCapture={(e) => { if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 8) cancelHold(); }} onPointerUpCapture={cancelHold} onPointerCancelCapture={cancelHold} onClickCapture={(e) => { if (suppressClick.current) { e.preventDefault(); e.stopPropagation(); suppressClick.current = false; } }}>
-    <DndContext sensors={sensors} collisionDetection={(args) => args.pointerCoordinates ? pointerWithin(args) : closestCenter(args)} onDragStart={(e) => { setDragging(String(e.active.id)); setOpen(true); onOpen(); }} onDragEnd={finish} onDragCancel={() => setDragging(null)}>
+    <DndContext sensors={sensors} collisionDetection={(args) => args.pointerCoordinates ? pointerWithin(args) : closestCenter(args)} onDragStart={(e) => { setDragging(String(e.active.id)); setOpen(true); onOpen(); }} onDragOver={(e) => setOver(e.over ? String(e.over.id) : null)} onDragEnd={finish} onDragCancel={() => { setDragging(null); setOver(null); }}>
       <div ref={bar} data-rearranging={editing} className="glass pointer-events-auto rounded-full p-1">
         <DropArea id="toolbar" className="shelf-bar flex min-h-10 items-center overflow-x-auto rounded-full px-1 py-1 [scrollbar-width:none]">
           <SortableContext items={items} strategy={horizontalListSortingStrategy}>
-            {items.map((id) => { const item = TOOL_ITEMS.find((t) => t.id === id); return item ? <ShelfItem key={id} item={item} active={item.tool === activeTool} editing={editing} activate={() => activate(id)} remove={() => setItems((v) => moveToolbarItem(v, id, "drawer"))}>{content(id)}</ShelfItem> : null; })}
+            {items.map((id) => { const item = TOOL_ITEMS.find((t) => t.id === id); return item ? <ShelfItem key={id} item={item} active={item.tool === activeTool} editing={editing} landing={dragging && over === id ? toolbarSlots(dragging) : 0} activate={() => activate(id)} remove={() => setItems((v) => moveToolbarItem(v, id, "drawer"))}>{content(id)}</ShelfItem> : null; })}
           </SortableContext>
-          {editing && Array.from({ length: emptyToolbarSlots(items, capacity) }, (_, i) => <span key={i} data-empty-slot className="shelf-empty-slot"><span /></span>)}
+          {editing && Array.from({ length: emptyToolbarSlots(items, capacity) }, (_, i) => <span key={i} data-empty-slot data-landing={dragging && over === "toolbar" && i < toolbarSlots(dragging) ? true : undefined} className="shelf-empty-slot"><span /></span>)}
           {!items.includes("more") && !open && <Button variant="ghost" size="icon" aria-label="More tools" title="More tools" className="size-8 shrink-0 rounded-full" onClick={() => { setOpen(true); onOpen(); }}><Ellipsis /></Button>}
         </DropArea>
       </div>

@@ -31,7 +31,7 @@ export const TOOL_ITEMS: ToolItem[] = [
   { id: "import", label: "Import image", icon: ImagePlus },
   { id: "export", label: "Export PNG", icon: Download },
 ];
-export const DEFAULT_TOOLBAR = ["files", "brush", "bucket", "eraser", "lasso", "transform", "blur", "smudge", "title", "more", "undo", "redo", "color", "layers"];
+export const DEFAULT_TOOLBAR = ["files", "color", "brush", "bucket", "eraser", "lasso", "transform", "blur", "smudge", "title", "more", "undo", "redo", "layers"];
 export const TOOLBAR_KEY = "glass-canvas.toolbar.v2";
 export const LEGACY_TOOLBAR_KEY = "glass-canvas.toolbar.v1";
 export function toolbarSlots(id: string): number { return TOOL_ITEMS.find((item) => item.id === id)?.slots ?? 1; }
