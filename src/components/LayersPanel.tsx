@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragMoveEvent } from "@dnd-kit/core";
+import { createPortal } from "react-dom";
+import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors, type DragMoveEvent } from "@dnd-kit/core";
 import { ChevronDown, ChevronRight, CornerLeftDown, Ellipsis, Eye, EyeOff, Folder, FolderPlus, Lock, Plus, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -112,7 +113,7 @@ export function LayersPanel({ nodes, activeId, rev, onSelect, onPatch, onAction,
           <button className="tool-btn size-8" aria-label="Add layer" title="New layer" onClick={() => onAction("add", activeId)}><Plus size={16} /></button>
         </div>
       </div>
-      <DndContext sensors={sensors} onDragStart={(e) => { setDragId(Number(e.active.id)); setDrop(null); }} onDragMove={where} onDragOver={where}
+      <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={(e) => { setDragId(Number(e.active.id)); setDrop(null); }} onDragMove={where} onDragOver={where}
         onDragCancel={() => { setDragId(null); setDrop(null); }}
         onDragEnd={(e) => { const d = dropRef.current; setDragId(null); setDrop(null); if (d) onMove(Number(e.active.id), d.id, d.where); }}>
         <div className="flex min-h-0 flex-col gap-1.5 overflow-y-auto overscroll-contain p-0.5">
@@ -121,7 +122,8 @@ export function LayersPanel({ nodes, activeId, rev, onSelect, onPatch, onAction,
               nodes={nodes} onSelect={onSelect} onPatch={onPatch} onAction={onAction} setRenaming={setRenaming} />
           ))}
         </div>
-        <DragOverlay dropAnimation={null}>{dragged && <div className="glass-strong rounded-xl px-3 py-2 text-sm font-medium">{dragged.name}</div>}</DragOverlay>
+        {/* The panel's blur effect would offset a fixed overlay, so render it at the page level. */}
+        {dragId !== null && createPortal(<DragOverlay dropAnimation={null}>{dragged && <div className="glass-strong w-fit rounded-xl px-3 py-2 text-sm font-medium">{dragged.name}</div>}</DragOverlay>, document.body)}
       </DndContext>
       {active && (
         <div className="mt-3 space-y-2.5 border-t border-glass-border px-1 pt-3">
