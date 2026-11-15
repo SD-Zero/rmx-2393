@@ -54,7 +54,7 @@ function Row({ node, depth, active, drop, rev, renaming, nodes, onSelect, onPatc
       </div>
       {node.locked && <button className="p-1" aria-label={`Unlock ${node.name}`} title="Locked" onClick={(e) => { e.stopPropagation(); onPatch(node.id, { locked: false }); }}><Lock size={14} /></button>}
       {active && (
-        <DropdownMenu>
+        <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild><button className="p-1" aria-label="Layer options" onClick={(e) => e.stopPropagation()}><Ellipsis size={16} /></button></DropdownMenuTrigger>
           <DropdownMenuContent align="end" sideOffset={6} className="glass-strong min-w-52 rounded-2xl border-glass-border p-1.5 text-foreground" onClick={(e) => e.stopPropagation()} onCloseAutoFocus={(e) => e.preventDefault()}>
             <DropdownMenuItem className={MI} onSelect={() => setTimeout(() => setRenaming(node.id), 0)}>Rename</DropdownMenuItem>
@@ -107,11 +107,12 @@ export function LayersPanel({ nodes, activeId, rev, onSelect, onPatch, onAction,
   }
   return (
     <div className="glass-strong animate-pop absolute right-1/2 top-16 flex max-h-[calc(100dvh-80px)] w-80 max-w-[calc(100vw-24px)] translate-x-1/2 flex-col rounded-3xl p-3 sm:right-6 sm:translate-x-0">
-      <div className="mb-2 flex items-center justify-between px-1">
+      <div className="mb-2 flex shrink-0 items-center justify-between px-1">
         <p className="text-sm font-semibold">Layers</p>
         <div className="flex">
           <button className="tool-btn size-8" aria-label="New folder" title="New folder" onClick={() => onAction("addFolder", activeId)}><FolderPlus size={16} /></button>
           <button className="tool-btn size-8" aria-label="Add layer" title="New layer" onClick={() => onAction("add", activeId)}><Plus size={16} /></button>
+          <button className="tool-btn size-8" aria-label="Delete selected" title="Delete" onClick={() => onAction("delete", activeId)}><Trash2 size={16} /></button>
         </div>
       </div>
       <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={(e) => { setDragId(Number(e.active.id)); setDrop(null); }} onDragMove={where} onDragOver={where}
@@ -127,7 +128,7 @@ export function LayersPanel({ nodes, activeId, rev, onSelect, onPatch, onAction,
         {dragId !== null && createPortal(<DragOverlay dropAnimation={null}>{dragged && <div className="glass-strong w-fit rounded-xl px-3 py-2 text-sm font-medium">{dragged.name}</div>}</DragOverlay>, document.body)}
       </DndContext>
       {active && (
-        <div className="mt-3 space-y-2.5 border-t border-glass-border px-1 pt-3">
+        <div className="mt-3 shrink-0 space-y-2.5 border-t border-glass-border px-1 pt-3">
           <div className="flex items-center gap-3">
             <span className="w-14 text-xs text-muted-foreground">Opacity</span>
             <Slider aria-label="Layer opacity" min={0} max={100} step={1} value={[active.opacity]} onValueChange={([v]) => onPatch(active.id, { opacity: v ?? 100 })} className="flex-1" />
