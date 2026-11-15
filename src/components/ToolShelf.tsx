@@ -26,6 +26,7 @@ export function ToolShelf({ activeTool, onActivate, title, onTitleChange, contro
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
   const [capacity, setCapacity] = useState(18);
   const root = useRef<HTMLDivElement>(null);
   const bar = useRef<HTMLDivElement>(null);

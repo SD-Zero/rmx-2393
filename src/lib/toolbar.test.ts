@@ -9,6 +9,6 @@ describe("artwork and toolbar rules", () => {
   it("requires a two-second hold to start rearranging", () => { expect(REARRANGE_HOLD_MS).toBe(2000); });
   it("allocates one slot per tool and multiple slots for wider controls", () => { expect(toolbarSlots("brush")).toBe(1); expect(toolbarSlots("files")).toBe(2); expect(toolbarSlots("title")).toBe(4); expect(emptyToolbarSlots(["files", "title", "brush"], 10)).toBe(3); expect(emptyToolbarSlots(["title"], 2)).toBe(0); });
   it("allows every toolbar control to be moved into and out of the drawer", () => { for (const id of ["files", "title", "more", "undo", "redo", "color", "layers"]) { expect(moveToolbarItem([id, "brush"], id, "drawer")).toEqual(["brush"]); expect(moveToolbarItem(["brush"], id, "toolbar")).toEqual(["brush", id]); } });
-  it("places the color circle between redo and layers by default", () => { expect(DEFAULT_TOOLBAR.slice(-3)).toEqual(["redo", "color", "layers"]); });
+  it("places the color circle right after files by default", () => { expect(DEFAULT_TOOLBAR.slice(0, 2)).toEqual(["files", "color"]); });
   it("preserves legacy drawing-tool order while adding movable controls", () => { expect(migrateToolbar(["hand", "brush"])).toEqual(["files", "hand", "brush", "title", "more", "undo", "redo", "color", "layers"]); });
 });
