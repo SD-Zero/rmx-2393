@@ -32,5 +32,6 @@ use the editor.
 - Keep color picking in a dedicated ColorPicker with colord conversions; this isolates pointer interactions and validates Hex/RGB/HSL consistently.
 - Keep recent colors in drawing-session state, recording completed picks rather than every drag sample; reopening the menu preserves useful recents without storing artwork.
 - Keep tool definitions in one registry and placement in a dedicated dnd-kit shelf; pointer and keyboard dragging share validated placement rules.
+- Render every toolbar control through the shelf registry and enable dragging only in explicit rearrange mode; this keeps wide controls, drawer removal, and saved placement consistent.
 - Persist only toolbar preferences in localStorage after hydration, tolerating blocked storage; private-browser storage is temporary and must not be treated as durable.
 - Store artwork titles in exported project documents and use sanitized titles for downloads; older projects without titles remain compatible.

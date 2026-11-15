@@ -102,9 +102,20 @@
 .color-square { inset: 23%; background: linear-gradient(to top, var(--picker-black), var(--picker-clear)), linear-gradient(to right, var(--picker-white), var(--picker-clear)), var(--picker-hue); touch-action: none; cursor: crosshair; }
 .color-handle { position: absolute; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--picker-white); box-shadow: var(--picker-handle-shadow); transform: translate(-50%, -50%); pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .animate-pop { animation: none; } }
-.shelf-bar { display: grid; grid-template-columns: minmax(0, 1fr) 160px minmax(0, 1fr); align-items: center; gap: 8px; }
-.shelf-pin { opacity: 0; }
-[data-shelf-item]:hover .shelf-pin, [data-shelf-item]:focus-within .shelf-pin { opacity: 1; }
-@media (hover: none) { .shelf-pin { opacity: .7; } }
-@media (max-width: 700px) { .shelf-bar { grid-template-columns: minmax(0, 1fr) 105px auto; gap: 2px; } }
-@media (max-width: 440px) { .shelf-bar { grid-template-columns: minmax(0, 1fr) 82px auto; } .shelf-bar > div:last-child { gap: 0; } .shelf-bar > div:last-child button { width: 26px; } }
+.shelf-bar { gap: 4px; }
+.shelf-slots-1 { width: 32px; }
+.shelf-slots-2 { width: 68px; }
+.shelf-slots-4 { width: 140px; }
+.shelf-item-content { width: 100%; outline: none; }
+.shelf-item-content:focus-visible { border-radius: var(--radius); outline: 2px solid var(--primary); }
+.shelf-bar:not(:has(.shelf-editing)) [data-shelf-item="title"] { margin-inline: auto; }
+.shelf-bar [data-shelf-item="more"]::before { content: ""; position: absolute; top: 6px; bottom: 6px; left: -3px; width: 1px; background: var(--glass-border); }
+.shelf-editing { animation: shelf-wiggle .28s ease-in-out infinite alternate; }
+.shelf-editing:nth-child(even) { animation-direction: alternate-reverse; }
+.shelf-bar .shelf-editing { border-radius: var(--radius); background: var(--muted); }
+.shelf-empty-slot { width: 32px; height: 32px; flex-shrink: 0; display: grid; place-items: center; }
+.shelf-empty-slot > span { width: 27px; height: 27px; border: 1px dashed var(--glass-border); border-radius: 50%; }
+.shelf-drawer { max-height: calc(100dvh - 86px); display: flex; flex-direction: column; }
+.shelf-drawer > [data-drop-area] { min-height: 0; max-height: 360px; }
+@keyframes shelf-wiggle { from { transform: rotate(-1.5deg); } to { transform: rotate(1.5deg); } }
+@media (prefers-reduced-motion: reduce) { .shelf-editing { animation: none; } }

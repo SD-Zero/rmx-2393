@@ -1,5 +1,5 @@
 - [x] Add editable artwork title and named exports/project reopening.
 - [x] Add scrollable tool drawer and mouse/touch/keyboard toolbar customization.
 - [x] Remember tool placement in browser storage and verify behavior and smaller screens.
-- [ ] Replace pin controls with two-second hold-to-rearrange for all toolbar items, slot guides, and drawer removal.
-- [ ] Verify rearranging, restored preferences, and compact layouts.
+- [x] Replace pin controls with two-second hold-to-rearrange for all toolbar items, slot guides, and drawer removal.
+- [x] Verify rearranging, restored preferences, and compact layouts.
