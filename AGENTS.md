@@ -35,3 +35,4 @@ use the editor.
 - Render every toolbar control through the shelf registry and enable dragging only in explicit rearrange mode; this keeps wide controls, drawer removal, and saved placement consistent.
 - Persist only toolbar preferences in localStorage after hydration, tolerating blocked storage; private-browser storage is temporary and must not be treated as durable.
 - Store artwork titles in exported project documents and use sanitized titles for downloads; older projects without titles remain compatible.
+- Store toolbar placement as fixed slot positions and never reflow it automatically; users rely on gaps and positions staying exactly where they dropped them.
