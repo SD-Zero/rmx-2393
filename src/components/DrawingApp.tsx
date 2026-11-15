@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Undo2, Redo2, Layers, Lock, LockOpen } from "lucide-react";
 import { LayersPanel, type LayerAction } from "./LayersPanel";
-import { children, defaultProps, descendantIds, insertAbove, isLocked, isShown, moveNode, removeNode, siblingBelow, wrapInFolder, type DropWhere, type NodeProps } from "@/lib/layerTree";
+import { children, defaultProps, descendantIds, insertAbove, isLocked, isShown, moveNode, removeNode, siblingBelow, type DropWhere, type NodeProps } from "@/lib/layerTree";
 import { floodMask, smudgeStart, smudgeDab, type Smudge } from "@/lib/paintOps";
 import { ChevronDown } from "lucide-react";
 import { VerticalSlider } from "./VerticalSlider";
@@ -536,7 +536,7 @@ export function DrawingApp() {
     }
     if (a === "addFolder") {
       const f = makeFolder(`Folder ${layers.filter((x) => x.kind === "folder").length + 1}`);
-      pushEntry(snapshot()); setLayers(n ? wrapInFolder<Node>(layers, f, n.id) : [...layers, f]); setActiveId(f.id); return;
+      pushEntry(snapshot()); setLayers(insertAbove<Node>(layers, f, n?.id ?? null)); setActiveId(f.id); return;
     }
     if (!n) return;
     if (a === "duplicate") {
