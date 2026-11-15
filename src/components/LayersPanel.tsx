@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors, type DragMoveEvent } from "@dnd-kit/core";
+import { DndContext, DragOverlay, MouseSensor, TouchSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors, type DragMoveEvent } from "@dnd-kit/core";
 import { ChevronDown, ChevronRight, CornerLeftDown, Ellipsis, Eye, EyeOff, Folder, FolderPlus, Lock, Plus, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { getEventCoordinates } from "@dnd-kit/utilities";
 import { BLEND_MODES, clipBase, descendantIds, displayRows, isLocked, siblingBelow, type BlendMode, type DropWhere, type NodeProps } from "@/lib/layerTree";
 
 export type PanelNode = NodeProps & { canvas?: HTMLCanvasElement | undefined };
@@ -29,19 +30,19 @@ function Row({ node, depth, active, drop, rev, renaming, nodes, onSelect, onPatc
   const layerCount = nodes.filter((n) => n.kind === "layer").length;
   const removable = !locked && nodes.filter((n) => n.kind === "layer" && (n.id === node.id || descendantIds(nodes, node.id).has(n.id))).length < layerCount;
   return (
-    <div ref={setNodeRef} data-layer-row={node.name} onClick={() => onSelect(node.id)} style={{ paddingLeft: 8 + depth * 16 }}
-      className={`relative flex cursor-pointer items-center gap-2 rounded-2xl py-1.5 pr-1.5 transition-colors ${active ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-accent"} ${drop === "into" ? "ring-2 ring-primary" : ""} ${drag.isDragging ? "opacity-40" : ""}`}>
+    <div ref={(el) => { setNodeRef(el); drag.setNodeRef(el); }} {...drag.listeners} {...drag.attributes} data-layer-row={node.name} onClick={() => onSelect(node.id)} style={{ paddingLeft: 8 + depth * 16 }}
+      className={`relative flex cursor-pointer select-none items-center [-webkit-touch-callout:none] gap-2 rounded-2xl py-1.5 pr-1.5 transition-colors ${active ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-accent"} ${drop === "into" ? "ring-2 ring-primary" : ""} ${drag.isDragging ? "opacity-40" : ""}`}>
       {drop === "above" && <span className="pointer-events-none absolute inset-x-2 -top-1 h-0.5 rounded bg-primary" />}
       {drop === "below" && <span className="pointer-events-none absolute inset-x-2 -bottom-1 h-0.5 rounded bg-primary" />}
       {folder
         ? <button className="-mr-1 p-0.5" aria-label={node.collapsed ? "Open folder" : "Close folder"} onClick={(e) => { e.stopPropagation(); onPatch(node.id, { collapsed: !node.collapsed }); }}>{node.collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}</button>
         : clipped && <CornerLeftDown size={13} className="-mr-1 shrink-0 opacity-70" aria-label="Clipping mask" />}
-      <div ref={drag.setNodeRef} {...drag.listeners} {...drag.attributes} aria-label={`Drag ${node.name}`} className={`flex h-10 w-14 shrink-0 cursor-grab touch-none items-center justify-center overflow-hidden rounded-lg ${folder ? "bg-glass" : "checker"}`}>
+      <div aria-label={`Drag ${node.name}`} className={`flex h-10 w-14 shrink-0 cursor-grab touch-none items-center justify-center overflow-hidden rounded-lg ${folder ? "bg-glass" : "checker"}`}>
         {folder ? <Folder size={18} /> : node.canvas && <LayerThumb canvas={node.canvas} tick={rev} />}
       </div>
       <div className="min-w-0 flex-1">
         {renaming
-          ? <input autoFocus defaultValue={node.name} aria-label="Layer name" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}
+          ? <input autoFocus defaultValue={node.name} aria-label="Layer name" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}
               onBlur={(e) => { onPatch(node.id, { name: e.currentTarget.value.trim() || node.name }); setRenaming(null); }}
               onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { e.currentTarget.value = node.name; e.currentTarget.blur(); } }}
               className="w-full rounded-md bg-background/80 px-1.5 py-0.5 text-sm text-foreground outline-none ring-1 ring-primary" />
@@ -59,7 +60,7 @@ function Row({ node, depth, active, drop, rev, renaming, nodes, onSelect, onPatc
             <DropdownMenuItem className={MI} onSelect={() => setTimeout(() => setRenaming(node.id), 0)}>Rename</DropdownMenuItem>
             <DropdownMenuItem className={MI} onSelect={() => onAction("duplicate", node.id)}>Duplicate</DropdownMenuItem>
             {folder
-              ? <DropdownMenuItem className={MI} disabled={locked} onSelect={() => onAction("flatten", node.id)}>Flatten folder</DropdownMenuItem>
+              ? <DropdownMenuItem className={MI} disabled={locked} onSelect={() => onAction("flatten", node.id)}>Merge All</DropdownMenuItem>
               : <>
                   <DropdownMenuItem className={MI} disabled={!canMerge} onSelect={() => onAction("mergeDown", node.id)}>Merge down</DropdownMenuItem>
                   <DropdownMenuSeparator className={MS} />
@@ -91,14 +92,14 @@ export function LayersPanel({ nodes, activeId, rev, onSelect, onPatch, onAction,
   const [drop, setDropState] = useState<{ id: number; where: DropWhere } | null>(null);
   const dropRef = useRef(drop);
   const setDrop = (d: typeof drop) => { dropRef.current = d; setDropState(d); };
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const sensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 5 } }), useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }));
   const rows = displayRows(nodes);
   const active = nodes.find((n) => n.id === activeId);
   const dragged = nodes.find((n) => n.id === dragId);
   function where(e: DragMoveEvent) {
     const over = e.over, target = over && nodes.find((n) => n.id === over.id);
     if (!over || !target || target.id === e.active.id || descendantIds(nodes, Number(e.active.id)).has(target.id)) return setDrop(null);
-    const y = (e.activatorEvent as PointerEvent).clientY + e.delta.y, f = (y - over.rect.top) / over.rect.height;
+    const y = (getEventCoordinates(e.activatorEvent)?.y ?? 0) + e.delta.y, f = (y - over.rect.top) / over.rect.height;
     let w: DropWhere = target.kind === "folder" ? (f < 0.3 ? "above" : f > 0.7 ? "below" : "into") : f < 0.5 ? "above" : "below";
     // Just under an open folder's row is the top of its contents.
     if (w === "below" && target.kind === "folder" && !target.collapsed && nodes.some((n) => n.parent === target.id)) w = "into";
