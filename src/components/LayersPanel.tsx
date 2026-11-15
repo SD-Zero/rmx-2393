@@ -87,7 +87,9 @@ function Row({ node, depth, active, drop, rev, renaming, nodes, onSelect, onPatc
 export function LayersPanel({ nodes, activeId, rev, onSelect, onPatch, onAction, onMove }: Props) {
   const [renaming, setRenaming] = useState<number | null>(null);
   const [dragId, setDragId] = useState<number | null>(null);
-  const [drop, setDrop] = useState<{ id: number; where: DropWhere } | null>(null);
+  const [drop, setDropState] = useState<{ id: number; where: DropWhere } | null>(null);
+  const dropRef = useRef(drop);
+  const setDrop = (d: typeof drop) => { dropRef.current = d; setDropState(d); };
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const rows = displayRows(nodes);
   const active = nodes.find((n) => n.id === activeId);
@@ -112,7 +114,7 @@ export function LayersPanel({ nodes, activeId, rev, onSelect, onPatch, onAction,
       </div>
       <DndContext sensors={sensors} onDragStart={(e) => { setDragId(Number(e.active.id)); setDrop(null); }} onDragMove={where} onDragOver={where}
         onDragCancel={() => { setDragId(null); setDrop(null); }}
-        onDragEnd={(e) => { const d = drop; setDragId(null); setDrop(null); if (d) onMove(Number(e.active.id), d.id, d.where); }}>
+        onDragEnd={(e) => { const d = dropRef.current; setDragId(null); setDrop(null); if (d) onMove(Number(e.active.id), d.id, d.where); }}>
         <div className="flex min-h-0 flex-col gap-1.5 overflow-y-auto overscroll-contain p-0.5">
           {rows.map(({ node, depth }) => (
             <Row key={node.id} node={node} depth={depth} active={node.id === activeId} drop={drop?.id === node.id ? drop.where : null} rev={rev} renaming={renaming === node.id}
