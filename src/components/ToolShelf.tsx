@@ -35,8 +35,8 @@ export function ToolShelf({ activeTool, onActivate, title, onTitleChange, contro
   const cancelHold = () => { if (hold.current) clearTimeout(hold.current); hold.current = null; start.current = null; };
   function beginEditing() { setEditing(true); setOpen(true); onOpen(); }
   function press(e: PointerEvent) {
-    if (editing || e.button !== 0) return;
     suppressClick.current = false;
+    if (editing || e.button !== 0) return;
     cancelHold(); start.current = { x: e.clientX, y: e.clientY };
     hold.current = setTimeout(() => { suppressClick.current = true; beginEditing(); hold.current = null; }, REARRANGE_HOLD_MS);
   }
