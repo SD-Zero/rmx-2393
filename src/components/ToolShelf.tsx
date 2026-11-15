@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode, type PointerEvent } from "react";
-import { DndContext, DragOverlay, PointerSensor, KeyboardSensor, useDroppable, useSensor, useSensors, pointerWithin, closestCenter, type DragEndEvent } from "@dnd-kit/core";
+import { DndContext, DragOverlay, PointerSensor, KeyboardSensor, useDroppable, useSensor, useSensors, pointerWithin, closestCenter, type DragEndEvent, type DragOverEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, sortableKeyboardCoordinates, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { Ellipsis, Grip, RotateCcw, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DEFAULT_TOOLBAR, TOOLBAR_KEY, LEGACY_TOOLBAR_KEY, REARRANGE_HOLD_MS, TOOL_ITEMS, emptyToolbarSlots, migrateToolbar, toolbarSlots, moveToolbarItem, validateToolbar, type Tool, type ToolItem } from "@/lib/toolbar";
+import { DEFAULT_TOOLBAR, TOOLBAR_KEY, LEGACY_TOOLBAR_KEY, REARRANGE_HOLD_MS, TOOL_ITEMS, migrateToolbar, toolbarSlots, packToolbar, placeToolbarItem, validatePlacements, type Tool, type ToolItem } from "@/lib/toolbar";
 
 type Props = { activeTool: Tool; onActivate: (id: string) => void; title: string; onTitleChange: (title: string) => void; controls: Record<string, ReactNode>; onOpen: () => void };
 function ShelfItem({ item, drawer, active, editing, activate, remove, children }: { item: ToolItem; drawer?: boolean; active: boolean; editing: boolean; activate: () => void; remove: () => void; children?: ReactNode }) {
@@ -17,10 +17,16 @@ function ShelfItem({ item, drawer, active, editing, activate, remove, children }
 }
 function DropArea({ id, children, className }: { id: string; children: ReactNode; className: string }) {
   const { setNodeRef, isOver } = useDroppable({ id });
-  return <div ref={setNodeRef} data-drop-area={id} className={`${className} ${isOver ? "bg-primary/15 ring-1 ring-primary" : ""}`}>{children}</div>;
+  return <div ref={setNodeRef} data-drop-area={id} className={`${className} ${isOver && id !== "toolbar" ? "bg-primary/15 ring-1 ring-primary" : ""}`}>{children}</div>;
+}
+function ToolbarSlot({ slot, visible, highlighted }: { slot: number; visible: boolean; highlighted: boolean }) {
+  const { setNodeRef } = useDroppable({ id: `slot:${slot}` });
+  return <div ref={setNodeRef} data-toolbar-slot={slot} data-highlighted={highlighted} className={`shelf-empty-slot ${visible ? "shelf-slot-visible" : ""} ${highlighted ? "shelf-slot-highlighted" : ""}`} style={{ gridColumn: slot + 1, gridRow: 1 }}><span /></div>;
 }
 export function ToolShelf({ activeTool, onActivate, title, onTitleChange, controls, onOpen }: Props) {
-  const [items, setItems] = useState([...DEFAULT_TOOLBAR]);
+  const [placements, setPlacements] = useState(() => packToolbar(DEFAULT_TOOLBAR));
+  const items = placements.map((p) => p.id);
+  const [dropSlot, setDropSlot] = useState<number | null>(null);
   const [ready, setReady] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -40,8 +46,8 @@ export function ToolShelf({ activeTool, onActivate, title, onTitleChange, contro
     cancelHold(); start.current = { x: e.clientX, y: e.clientY };
     hold.current = setTimeout(() => { suppressClick.current = true; beginEditing(); hold.current = null; }, REARRANGE_HOLD_MS);
   }
-  useEffect(() => { try { const saved = localStorage.getItem(TOOLBAR_KEY); const legacy = localStorage.getItem(LEGACY_TOOLBAR_KEY); if (saved) setItems(validateToolbar(JSON.parse(saved))); else if (legacy) setItems(migrateToolbar(JSON.parse(legacy))); } catch { /* Storage may be blocked or ephemeral. */ } setReady(true); }, []);
-  useEffect(() => { if (ready) { try { localStorage.setItem(TOOLBAR_KEY, JSON.stringify(items)); } catch { /* Session-only when unavailable. */ } } }, [items, ready]);
+  useEffect(() => { try { const saved = localStorage.getItem(TOOLBAR_KEY); const legacy = localStorage.getItem(LEGACY_TOOLBAR_KEY); if (saved) setPlacements(validatePlacements(JSON.parse(saved))); else if (legacy) setPlacements(packToolbar(migrateToolbar(JSON.parse(legacy)))); } catch { /* Storage may be blocked or ephemeral. */ } setReady(true); }, []);
+  useEffect(() => { if (ready) { try { localStorage.setItem(TOOLBAR_KEY, JSON.stringify(placements)); } catch { /* Session-only when unavailable. */ } } }, [placements, ready]);
   useEffect(() => { const el = bar.current; if (!el) return; const observer = new ResizeObserver(([entry]) => { if (entry) setCapacity(Math.max(1, Math.floor((entry.contentRect.width - 8) / 36))); }); observer.observe(el); return () => observer.disconnect(); }, []);
   useEffect(() => {
     const close = (e: globalThis.PointerEvent) => { if (!dragging && e.target instanceof Node && !root.current?.contains(e.target)) { setOpen(false); setEditing(false); cancelHold(); } };
@@ -49,9 +55,15 @@ export function ToolShelf({ activeTool, onActivate, title, onTitleChange, contro
     document.addEventListener("pointerdown", close); document.addEventListener("keydown", esc);
     return () => { document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", esc); cancelHold(); };
   }, [dragging]);
+  function targetSlot(e: DragOverEvent | DragEndEvent): number | null {
+    if (!e.over || e.over.id === "drawer") return null;
+    const target = String(e.over.id);
+    if (target.startsWith("slot:")) return Number(target.slice(5));
+    return placements.find((p) => p.id === target)?.slot ?? null;
+  }
   function finish(e: DragEndEvent) {
-    if (e.over) { const target = String(e.over.id); setItems((v) => moveToolbarItem(v, String(e.active.id), target === "drawer" || (!v.includes(target) && target !== "toolbar") ? "drawer" : target)); }
-    setDragging(null);
+    if (e.over) setPlacements((v) => placeToolbarItem(v, String(e.active.id), targetSlot(e)));
+    setDragging(null); setDropSlot(null);
   }
   const drawer = TOOL_ITEMS.filter((t) => !items.includes(t.id));
   const dragged = TOOL_ITEMS.find((t) => t.id === dragging);
@@ -63,18 +75,20 @@ export function ToolShelf({ activeTool, onActivate, title, onTitleChange, contro
     return controls[id] ? <div className={`flex items-center justify-center ${inDrawer ? "h-20" : "h-8"}`} onClick={() => { if (inDrawer && id !== "files") setOpen(false); }}>{controls[id]}</div> : undefined;
   }
   return <div ref={root} className="pointer-events-none absolute inset-x-0 top-2.5 z-20 px-3" onPointerDownCapture={press} onPointerMoveCapture={(e) => { if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 8) cancelHold(); }} onPointerUpCapture={cancelHold} onPointerCancelCapture={cancelHold} onClickCapture={(e) => { if (suppressClick.current) { e.preventDefault(); e.stopPropagation(); suppressClick.current = false; } }}>
-    <DndContext sensors={sensors} collisionDetection={(args) => args.pointerCoordinates ? pointerWithin(args) : closestCenter(args)} onDragStart={(e) => { setDragging(String(e.active.id)); setOpen(true); onOpen(); }} onDragEnd={finish} onDragCancel={() => setDragging(null)}>
+    <DndContext sensors={sensors} collisionDetection={(args) => args.pointerCoordinates ? pointerWithin(args).filter((hit) => hit.id !== "toolbar").sort((a, b) => Number(String(b.id).startsWith("slot:")) - Number(String(a.id).startsWith("slot:"))) : closestCenter(args)} onDragStart={(e) => { setDragging(String(e.active.id)); setOpen(true); onOpen(); }} onDragOver={(e) => setDropSlot(targetSlot(e))} onDragEnd={finish} onDragCancel={() => { setDragging(null); setDropSlot(null); }}>
       <div ref={bar} data-rearranging={editing} className="glass pointer-events-auto rounded-full p-1">
-        <DropArea id="toolbar" className="shelf-bar flex min-h-10 items-center overflow-x-auto rounded-full px-1 py-1 [scrollbar-width:none]">
+        <DropArea id="toolbar" className="shelf-bar min-h-10 overflow-x-auto rounded-full px-1 py-1 [scrollbar-width:none]">
+          <div className="shelf-slot-grid" style={{ gridTemplateColumns: `repeat(${Math.max(capacity, ...placements.map((p) => p.slot + toolbarSlots(p.id)), dropSlot === null ? 0 : dropSlot + toolbarSlots(dragging ?? ""))}, 32px)` }}>
+          {Array.from({ length: Math.max(capacity, ...placements.map((p) => p.slot + toolbarSlots(p.id))) }, (_, slot) => <ToolbarSlot key={slot} slot={slot} visible={editing} highlighted={dropSlot !== null && slot >= dropSlot && slot < dropSlot + toolbarSlots(dragging ?? "")} />)}
           <SortableContext items={items} strategy={horizontalListSortingStrategy}>
-            {items.map((id) => { const item = TOOL_ITEMS.find((t) => t.id === id); return item ? <ShelfItem key={id} item={item} active={item.tool === activeTool} editing={editing} activate={() => activate(id)} remove={() => setItems((v) => moveToolbarItem(v, id, "drawer"))}>{content(id)}</ShelfItem> : null; })}
+            {placements.map(({ id, slot }) => { const item = TOOL_ITEMS.find((t) => t.id === id); return item ? <div key={id} className="shelf-placed-item" style={{ gridColumn: `${slot + 1} / span ${toolbarSlots(id)}`, gridRow: 1 }}><ShelfItem item={item} active={item.tool === activeTool} editing={editing} activate={() => activate(id)} remove={() => setPlacements((v) => placeToolbarItem(v, id, null))}>{content(id)}</ShelfItem></div> : null; })}
           </SortableContext>
-          {editing && Array.from({ length: emptyToolbarSlots(items, capacity) }, (_, i) => <span key={i} data-empty-slot className="shelf-empty-slot"><span /></span>)}
+          </div>
           {!items.includes("more") && !open && <Button variant="ghost" size="icon" aria-label="More tools" title="More tools" className="size-8 shrink-0 rounded-full" onClick={() => { setOpen(true); onOpen(); }}><Ellipsis /></Button>}
         </DropArea>
       </div>
       {open && <section aria-label="More tools drawer" className="glass-strong pointer-events-auto animate-pop shelf-drawer absolute right-3 top-16 w-[360px] max-w-[calc(100vw-24px)] rounded-2xl p-3">
-        <div className="mb-2 flex items-center justify-between"><h2 className="px-1 text-sm font-semibold">Tools</h2><div className="flex"><Button variant="ghost" size="icon" className="size-7 rounded-full" aria-label={editing ? "Finish rearranging" : "Rearrange toolbar"} title={editing ? "Done" : "Rearrange toolbar"} onClick={() => editing ? setEditing(false) : beginEditing()}>{editing ? <Check /> : <Grip />}</Button><Button variant="ghost" size="icon" className="size-7 rounded-full" aria-label="Reset toolbar" title="Reset toolbar" onClick={() => setItems([...DEFAULT_TOOLBAR])}><RotateCcw /></Button><Button variant="ghost" size="icon" className="size-7 rounded-full" aria-label="Close tools" title="Close tools" onClick={() => { setOpen(false); setEditing(false); }}><X /></Button></div></div>
+        <div className="mb-2 flex items-center justify-between"><h2 className="px-1 text-sm font-semibold">Tools</h2><div className="flex"><Button variant="ghost" size="icon" className="size-7 rounded-full" aria-label={editing ? "Finish rearranging" : "Rearrange toolbar"} title={editing ? "Done" : "Rearrange toolbar"} onClick={() => editing ? setEditing(false) : beginEditing()}>{editing ? <Check /> : <Grip />}</Button><Button variant="ghost" size="icon" className="size-7 rounded-full" aria-label="Reset toolbar" title="Reset toolbar" onClick={() => setPlacements(packToolbar(DEFAULT_TOOLBAR))}><RotateCcw /></Button><Button variant="ghost" size="icon" className="size-7 rounded-full" aria-label="Close tools" title="Close tools" onClick={() => { setOpen(false); setEditing(false); }}><X /></Button></div></div>
         <DropArea id="drawer" className="grid min-h-20 grid-cols-4 gap-2 overflow-y-auto overscroll-contain rounded-lg touch-pan-y p-1">
           <SortableContext items={drawer.map((t) => t.id)}>{drawer.map((item) => <ShelfItem key={item.id} item={item} drawer active={item.tool === activeTool} editing={editing} activate={() => activate(item.id)} remove={() => {}}>{content(item.id, true)}</ShelfItem>)}</SortableContext>
         </DropArea>
