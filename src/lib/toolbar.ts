@@ -48,38 +48,6 @@ export function moveToolbarItem(items: string[], id: string, target: string): st
   next.splice(index < 0 ? next.length : index, 0, id);
   return next;
 }
-export type ToolbarPlacement = { id: string; slot: number };
-export function packToolbar(items: string[]): ToolbarPlacement[] {
-  let slot = 0;
-  return items.map((id) => { const placement = { id, slot }; slot += toolbarSlots(id); return placement; });
-}
-export function validatePlacements(value: unknown): ToolbarPlacement[] {
-  if (!Array.isArray(value)) return packToolbar(DEFAULT_TOOLBAR);
-  if (value.every((entry) => typeof entry === "string")) return packToolbar(validateToolbar(value));
-  const next: ToolbarPlacement[] = [];
-  for (const entry of value) {
-    if (!entry || typeof entry.id !== "string" || !TOOL_ITEMS.some((t) => t.id === entry.id) || next.some((p) => p.id === entry.id) || !Number.isInteger(entry.slot) || entry.slot < 0 || entry.slot > 200) continue;
-    next.push({ id: entry.id, slot: entry.slot });
-  }
-  return next.sort((a, b) => a.slot - b.slot).reduce<ToolbarPlacement[]>((result, entry) => {
-    const last = result.at(-1);
-    result.push({ ...entry, slot: Math.max(entry.slot, last ? last.slot + toolbarSlots(last.id) : 0) });
-    return result;
-  }, []);
-}
-export function placeToolbarItem(items: ToolbarPlacement[], id: string, slot: number | null): ToolbarPlacement[] {
-  if (!TOOL_ITEMS.some((t) => t.id === id)) return items;
-  const next = items.filter((p) => p.id !== id).map((p) => ({ ...p }));
-  if (slot === null) return next;
-  const start = Math.max(0, Math.floor(slot));
-  let end = start + toolbarSlots(id);
-  for (const item of next.sort((a, b) => a.slot - b.slot)) {
-    if (item.slot + toolbarSlots(item.id) <= start) continue;
-    if (item.slot < end) item.slot = end;
-    end = item.slot + toolbarSlots(item.id);
-  }
-  return [...next, { id, slot: start }].sort((a, b) => a.slot - b.slot);
-}
 export function artworkName(title: string): string {
   return title.trim() || "Untitled";
 }
