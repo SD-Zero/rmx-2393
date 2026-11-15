@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { BLEND_MODES, clipBase, descendantIds, displayRows, isLocked, siblingBelow, type BlendMode, type DropWhere, type NodeProps } from "@/lib/layerTree";
 
-export type PanelNode = NodeProps & { canvas?: HTMLCanvasElement };
+export type PanelNode = NodeProps & { canvas?: HTMLCanvasElement | undefined };
 export type LayerAction = "add" | "addFolder" | "duplicate" | "mergeDown" | "flatten" | "clear" | "invert" | "flipH" | "flipV" | "delete";
 type Props = {
   nodes: PanelNode[]; activeId: number; rev: number;

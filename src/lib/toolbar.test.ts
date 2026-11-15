@@ -14,3 +14,6 @@ describe("artwork and toolbar rules", () => {
   it("centers wide items on the hovered slot", () => { expect(landingSlot("title", 5, 12)).toBe(3); expect(landingSlot("title", 11, 12)).toBe(8); });
   it("restores validated saved placement", () => { expect(validateToolbarLayout([{ id: "hand", slot: 3 }, { id: "hand", slot: 5 }, { id: "fake", slot: 1 }, { id: "brush", slot: 0 }])).toEqual([{ id: "brush", slot: 0 }, { id: "hand", slot: 3 }]); expect(validateToolbarLayout(null)).toBeNull(); });
 });
+describe("tools menu", () => {
+  it("no longer holds layer editing tools", async () => { const { TOOL_ITEMS } = await import("./toolbar"); for (const id of ["flipH", "flipV", "duplicate", "clear", "addLayer"]) expect(TOOL_ITEMS.some((t) => t.id === id)).toBe(false); });
+});
