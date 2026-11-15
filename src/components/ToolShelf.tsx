@@ -82,12 +82,12 @@ export function ToolShelf({ activeTool, onActivate, title, onTitleChange, contro
     <DndContext sensors={sensors} collisionDetection={(args) => args.pointerCoordinates ? pointerWithin(args) : closestCenter(args)} onDragStart={(e) => { setDragging(String(e.active.id)); setOpen(true); onOpen(); }} onDragOver={(e) => setOver(e.over ? String(e.over.id) : null)} onDragEnd={finish} onDragCancel={() => { setDragging(null); setOver(null); }}>
       <div ref={bar} data-rearranging={editing} className="glass pointer-events-auto rounded-full p-1">
         <div className="shelf-bar flex min-h-10 items-center overflow-x-auto rounded-full px-1 py-1 [scrollbar-width:none]">
-          <div className="shelf-grid mx-auto" style={{ gridTemplateColumns: `repeat(${cols}, 32px)` }}>
+          <div className="shelf-grid" style={{ gridTemplateColumns: `repeat(${cols}, 32px)` }}>
             {Array.from({ length: cols }, (_, i) => <SlotCell key={i} index={i} circle={editing && !occupied.has(i)} />)}
             {dragging && landing !== null && <span className="shelf-landing" aria-hidden style={{ gridColumn: `${landing + 1} / span ${toolbarSlots(dragging)}` }}>{Array.from({ length: toolbarSlots(dragging) }, (_, i) => <span key={i} className="shelf-empty-slot" data-landing><span /></span>)}</span>}
             {placed.map(({ id, slot }) => { const item = TOOL_ITEMS.find((t) => t.id === id); return item ? <ShelfItem key={id} item={item} slot={slot} active={item.tool === activeTool} editing={editing} activate={() => activate(id)} remove={() => commit(removeToolbarItem(placed, id))}>{content(id)}</ShelfItem> : null; })}
           </div>
-          {layout && !inBar("more") && !open && <Button variant="ghost" size="icon" aria-label="More tools" title="More tools" className="size-8 shrink-0 rounded-full" onClick={() => { setOpen(true); onOpen(); }}><Ellipsis /></Button>}
+          {layout && !inBar("more") && <Button variant="ghost" size="icon" aria-label="More tools" title="More tools" className="size-8 shrink-0 rounded-full" onClick={() => { setOpen(true); onOpen(); }}><Ellipsis /></Button>}
         </div>
       </div>
       {open && <section aria-label="More tools drawer" className="glass-strong pointer-events-auto animate-pop shelf-drawer absolute right-3 top-16 w-[360px] max-w-[calc(100vw-24px)] rounded-2xl p-3">
