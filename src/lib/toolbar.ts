@@ -80,7 +80,7 @@ export function placeToolbarItem(layout: ToolbarLayout, id: string, start: numbe
     const left = others.filter(isLeft), right = others.filter((e) => !isLeft(e));
     const out: ToolbarLayout = [{ id, slot: start }];
     let limit = start, ok = true;
-    for (let i = left.length - 1; i >= 0; i--) { const slot = Math.min(left[i].slot, limit - toolbarSlots(left[i].id)); if (slot < 0) { ok = false; break; } out.push({ id: left[i].id, slot }); limit = slot; }
+    for (const e of [...left].reverse()) { const slot = Math.min(e.slot, limit - toolbarSlots(e.id)); if (slot < 0) { ok = false; break; } out.push({ id: e.id, slot }); limit = slot; }
     limit = start + size;
     for (const e of right) { if (!ok) break; const slot = Math.max(e.slot, limit); if (slot + toolbarSlots(e.id) > cols) { ok = false; break; } out.push({ id: e.id, slot }); limit = slot + toolbarSlots(e.id); }
     if (ok) return out.sort((a, b) => a.slot - b.slot);
