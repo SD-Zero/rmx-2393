@@ -462,6 +462,8 @@ export function DrawingApp() {
 
   function activateShelf(id: string) {
     setPanel(null);
+    if (id === "undo") { doUndo(); return; }
+    if (id === "redo") { doRedo(); return; }
     const item = TOOL_ITEMS.find((t) => t.id === id);
     if (item?.tool) { pickTool(item.tool); return; }
     if (id === "fit") { fit(); return; }
@@ -497,12 +499,15 @@ export function DrawingApp() {
 
       {/* Top bar */}
       <ToolShelf activeTool={tool} onActivate={activateShelf} title={title} onTitleChange={setTitle} onOpen={() => setPanel(null)}
-        color={<Button variant="ghost" onClick={() => setPanel(panel === "color" ? null : "color")} aria-label="Color" title="Color" className="mx-1 size-5 shrink-0 rounded-full border border-foreground/60 p-0" style={{ background: color }} />}
-        trailing={<><Button variant="ghost" size="icon" className="size-8 rounded-full" onClick={doUndo} disabled={!undo.current.length} aria-label="Undo" title="Undo"><Undo2 size={16} /></Button><Button variant="ghost" size="icon" className="size-8 rounded-full" onClick={doRedo} disabled={!redo.current.length} aria-label="Redo" title="Redo"><Redo2 size={16} /></Button><div className={DIV} /><Button variant="ghost" size="icon" className={`size-8 rounded-full ${panel === "layers" ? "bg-accent" : ""}`} onClick={() => setPanel(panel === "layers" ? null : "layers")} aria-label="Layers" title="Layers"><Layers size={16} /></Button></>}
-        leading={<DropdownMenu>
-            <DropdownMenuTrigger className="flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-[13px] font-semibold outline-none transition-colors hover:bg-accent data-[state=open]:bg-accent">
+        controls={{
+          color: <Button variant="ghost" onClick={() => setPanel(panel === "color" ? null : "color")} aria-label="Color" title="Color" className="size-5 shrink-0 rounded-full border border-foreground/60 p-0" style={{ background: color }} />,
+          undo: <Button variant="ghost" size="icon" className="size-8 rounded-full" onClick={doUndo} disabled={!undo.current.length} aria-label="Undo" title="Undo"><Undo2 size={16} /></Button>,
+          redo: <Button variant="ghost" size="icon" className="size-8 rounded-full" onClick={doRedo} disabled={!redo.current.length} aria-label="Redo" title="Redo"><Redo2 size={16} /></Button>,
+          layers: <Button variant="ghost" size="icon" className={`size-8 rounded-full ${panel === "layers" ? "bg-accent" : ""}`} onClick={() => setPanel(panel === "layers" ? null : "layers")} aria-label="Layers" title="Layers"><Layers size={16} /></Button>,
+          files: <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button variant="ghost" aria-label="Files" className="flex h-8 w-full shrink-0 items-center gap-1 rounded-full px-2 text-[13px] font-semibold outline-none transition-colors hover:bg-accent data-[state=open]:bg-accent">
               Files <ChevronDown size={13} className="opacity-70" />
-            </DropdownMenuTrigger>
+            </Button></DropdownMenuTrigger>
             <DropdownMenuContent align="start" sideOffset={10} className="glass-strong min-w-56 rounded-2xl border-glass-border p-1.5 text-foreground">
               <DropdownMenuItem className={MI} onSelect={newCanvas}>New Canvas</DropdownMenuItem>
               <DropdownMenuSeparator className={MS} />
@@ -520,7 +525,7 @@ export function DrawingApp() {
               <DropdownMenuSeparator className={MS} />
               <DropdownMenuItem className={MI} disabled>View Timelapse<span className={SOON}>Soon</span></DropdownMenuItem>
             </DropdownMenuContent>
-          </DropdownMenu>} />
+          </DropdownMenu> }} />
 
       {panel === "color" && (
         <ColorPicker color={color} recent={recentColors} onChange={setColor} onCommit={(c) => setRecentColors((recent) => rememberColor(recent, c))} onClose={() => setPanel(null)} />
