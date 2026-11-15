@@ -31,23 +31,63 @@ export const TOOL_ITEMS: ToolItem[] = [
   { id: "import", label: "Import image", icon: ImagePlus },
   { id: "export", label: "Export PNG", icon: Download },
 ];
-export const DEFAULT_TOOLBAR = ["files", "color", "brush", "bucket", "eraser", "lasso", "transform", "blur", "smudge", "title", "more", "undo", "redo", "layers"];
-export const TOOLBAR_KEY = "glass-canvas.toolbar.v2";
-export const LEGACY_TOOLBAR_KEY = "glass-canvas.toolbar.v1";
+export type ToolbarLayout = { id: string; slot: number }[];
+const DEFAULT_LEFT = ["files", "color", "brush", "bucket", "eraser"];
+const DEFAULT_RIGHT = ["more", "undo", "redo", "layers"];
+export const DEFAULT_TOOLBAR = [...DEFAULT_LEFT, "title", ...DEFAULT_RIGHT];
+export const TOOLBAR_KEY = "glass-canvas.toolbar.v3";
 export function toolbarSlots(id: string): number { return TOOL_ITEMS.find((item) => item.id === id)?.slots ?? 1; }
-export function emptyToolbarSlots(items: string[], capacity: number): number { return Math.max(0, capacity - items.reduce((total, id) => total + toolbarSlots(id), 0)); }
-export function migrateToolbar(value: unknown): string[] { return ["files", ...validateToolbar(value).filter((id) => !["files", "title", "more", "undo", "redo", "color", "layers"].includes(id)), "title", "more", "undo", "redo", "color", "layers"]; }
-export function validateToolbar(value: unknown): string[] {
-  return Array.isArray(value) ? [...new Set(value.filter((id): id is string => typeof id === "string" && TOOL_ITEMS.some((t) => t.id === id)))] : [...DEFAULT_TOOLBAR];
+export function toolbarEnd(layout: ToolbarLayout): number { return layout.reduce((end, e) => Math.max(end, e.slot + toolbarSlots(e.id)), 0); }
+/** Default placement for a bar with `capacity` slots: left group, centered title, right group. */
+export function defaultToolbarLayout(capacity: number): ToolbarLayout {
+  const out: ToolbarLayout = [];
+  let slot = 0;
+  for (const id of DEFAULT_LEFT) { out.push({ id, slot }); slot += toolbarSlots(id); }
+  const rightSize = DEFAULT_RIGHT.reduce((n, id) => n + toolbarSlots(id), 0);
+  const titleSize = toolbarSlots("title");
+  const cols = Math.max(capacity, slot + titleSize + rightSize);
+  const rightStart = cols - rightSize;
+  out.push({ id: "title", slot: Math.min(Math.max(slot, Math.floor((cols - titleSize) / 2)), rightStart - titleSize) });
+  slot = rightStart;
+  for (const id of DEFAULT_RIGHT) { out.push({ id, slot }); slot += toolbarSlots(id); }
+  return out;
 }
-export function moveToolbarItem(items: string[], id: string, target: string): string[] {
-  if (!TOOL_ITEMS.some((t) => t.id === id) || id === target) return items;
-  const next = items.filter((v) => v !== id);
-  if (target === "drawer") return next;
-  const index = next.indexOf(target);
-  next.splice(index < 0 ? next.length : index, 0, id);
-  return next;
+/** Keeps known, unique, non-overlapping entries; returns null when the saved value is unusable. */
+export function validateToolbarLayout(value: unknown): ToolbarLayout | null {
+  if (!Array.isArray(value)) return null;
+  const seen = new Set<string>();
+  const entries = value.filter((e): e is { id: string; slot: number } => !!e && typeof e.id === "string" && TOOL_ITEMS.some((t) => t.id === e.id) && Number.isInteger(e.slot) && e.slot >= 0 && e.slot < 200)
+    .sort((a, b) => a.slot - b.slot);
+  const out: ToolbarLayout = [];
+  let end = 0;
+  for (const e of entries) { if (seen.has(e.id) || e.slot < end) continue; seen.add(e.id); out.push({ id: e.id, slot: e.slot }); end = e.slot + toolbarSlots(e.id); }
+  return out;
 }
+/** Start slot for a dragged item centered on the hovered slot. */
+export function landingSlot(id: string, hovered: number, cols: number): number {
+  const size = toolbarSlots(id);
+  return Math.max(0, Math.min(hovered - Math.floor(size / 2), cols - size));
+}
+/** Places `id` at `start`, keeping gaps; only overlapping neighbours are nudged aside. Returns null when it cannot fit. */
+export function placeToolbarItem(layout: ToolbarLayout, id: string, start: number, cols: number): ToolbarLayout | null {
+  if (!TOOL_ITEMS.some((t) => t.id === id)) return null;
+  const size = toolbarSlots(id);
+  if (size > cols) return null;
+  start = Math.max(0, Math.min(start, cols - size));
+  const others = layout.filter((e) => e.id !== id).sort((a, b) => a.slot - b.slot);
+  const splits = [(e: { slot: number }) => e.slot < start, (e: { id: string; slot: number }) => e.slot + toolbarSlots(e.id) <= start];
+  for (const isLeft of splits) {
+    const left = others.filter(isLeft), right = others.filter((e) => !isLeft(e));
+    const out: ToolbarLayout = [{ id, slot: start }];
+    let limit = start, ok = true;
+    for (let i = left.length - 1; i >= 0; i--) { const slot = Math.min(left[i].slot, limit - toolbarSlots(left[i].id)); if (slot < 0) { ok = false; break; } out.push({ id: left[i].id, slot }); limit = slot; }
+    limit = start + size;
+    for (const e of right) { if (!ok) break; const slot = Math.max(e.slot, limit); if (slot + toolbarSlots(e.id) > cols) { ok = false; break; } out.push({ id: e.id, slot }); limit = slot + toolbarSlots(e.id); }
+    if (ok) return out.sort((a, b) => a.slot - b.slot);
+  }
+  return null;
+}
+export function removeToolbarItem(layout: ToolbarLayout, id: string): ToolbarLayout { return layout.filter((e) => e.id !== id); }
 export function artworkName(title: string): string {
   return title.trim() || "Untitled";
 }
