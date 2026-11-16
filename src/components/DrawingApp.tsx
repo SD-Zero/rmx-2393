@@ -329,7 +329,7 @@ export function DrawingApp() {
     else if (direct) { if (tool === "blur") dab(active, p, p); } else stamp({ ...p, p: pr }, { ...p, p: pr });
     render();
   }
-  function drawShape(a: Pt, b: Pt) {
+  function drawShape(a: { x: number; y: number }, b: { x: number; y: number }) {
     const c = strokeRef.current!.getContext("2d")!;
     c.clearRect(0, 0, W, H);
     let dx = b.x - a.x, dy = b.y - a.y;
@@ -341,7 +341,7 @@ export function DrawingApp() {
     else c.rect(x, y, w, h);
     c.stroke(); c.restore();
   }
-  function placeText(l: Layer, p: Pt) {
+  function placeText(l: Layer, p: { x: number; y: number }) {
     const text = window.prompt("Text");
     if (!text) return;
     const ctx = l.canvas.getContext("2d")!, before = ctx.getImageData(0, 0, W, H);
