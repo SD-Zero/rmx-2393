@@ -11,7 +11,7 @@ import { ColorPicker } from "./ColorPicker";
 import { rememberColor } from "@/lib/colorValues";
 import { ToolShelf } from "./ToolShelf";
 import { Button } from "@/components/ui/button";
-import { TOOL_ITEMS, artworkFilename, artworkName, type Tool } from "@/lib/toolbar";
+import { SHAPE_TOOLS, TOOL_ITEMS, artworkFilename, artworkName, type Tool } from "@/lib/toolbar";
 
 type Layer = NodeProps & { kind: "layer"; canvas: HTMLCanvasElement };
 type FolderNode = NodeProps & { kind: "folder"; canvas?: undefined };
@@ -60,7 +60,7 @@ export function DrawingApp() {
   const redo = useRef<Entry[]>([]);
   const [rev, force] = useState(0);
   type SmudgeRun = { s: Smudge; work: ImageData; clip: Uint8Array | null; dirty: [number, number, number, number] | null };
-  const drawing = useRef<{ pts: Pt[]; layer: Layer; before: ImageData; direct: boolean; sm?: SmudgeRun } | null>(null);
+  const drawing = useRef<{ pts: Pt[]; layer: Layer; before: ImageData; direct: boolean; sm?: SmudgeRun; shape?: boolean } | null>(null);
   const [sel, setSel] = useState<P2[] | null>(null);
   const lasso = useRef<P2[] | null>(null);
   const [lassoPts, setLassoPts] = useState<P2[] | null>(null);
@@ -316,6 +316,7 @@ export function DrawingApp() {
     if (tool === "lasso") { lasso.current = [p]; setLassoPts([p]); return; }
     if (tool === "bucket") { bucket(active, p); return; }
     if (tool === "transform") { startTransform(active, p); return; }
+    if (tool === "text") { placeText(active, p); return; }
     const direct = tool === "blur" || tool === "smudge";
     const before = active.canvas.getContext("2d")!.getImageData(0, 0, W, H);
     strokeRef.current!.getContext("2d")!.clearRect(0, 0, W, H);
@@ -324,8 +325,31 @@ export function DrawingApp() {
       const work = new ImageData(new Uint8ClampedArray(before.data), W, H);
       drawing.current.sm = { work, clip: selMask(), dirty: null, s: smudgeStart(work.data, W, H, p.x, p.y, Math.max(3, size / 2)) };
     }
-    if (direct) { if (tool === "blur") dab(active, p, p); } else stamp({ ...p, p: pr }, { ...p, p: pr });
+    if (SHAPE_TOOLS.includes(tool)) drawing.current.shape = true;
+    else if (direct) { if (tool === "blur") dab(active, p, p); } else stamp({ ...p, p: pr }, { ...p, p: pr });
     render();
+  }
+  function drawShape(a: Pt, b: Pt) {
+    const c = strokeRef.current!.getContext("2d")!;
+    c.clearRect(0, 0, W, H);
+    let dx = b.x - a.x, dy = b.y - a.y;
+    if (tool === "circle" || tool === "square") { const m = Math.max(Math.abs(dx), Math.abs(dy)); dx = Math.sign(dx || 1) * m; dy = Math.sign(dy || 1) * m; }
+    const x = Math.min(a.x, a.x + dx), y = Math.min(a.y, a.y + dy), w = Math.abs(dx), h = Math.abs(dy);
+    c.save(); c.strokeStyle = color; c.lineWidth = size; c.lineJoin = "round"; c.beginPath();
+    if (tool === "circle" || tool === "ellipse") c.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+    else if (tool === "triangle") { c.moveTo(x + w / 2, y); c.lineTo(x + w, y + h); c.lineTo(x, y + h); c.closePath(); }
+    else c.rect(x, y, w, h);
+    c.stroke(); c.restore();
+  }
+  function placeText(l: Layer, p: Pt) {
+    const text = window.prompt("Text");
+    if (!text) return;
+    const ctx = l.canvas.getContext("2d")!, before = ctx.getImageData(0, 0, W, H);
+    ctx.save(); if (sel) ctx.clip(selPath(sel));
+    ctx.globalAlpha = opacity / 100; if (l.alphaLock) ctx.globalCompositeOperation = "source-atop";
+    ctx.fillStyle = color; ctx.font = `${Math.max(12, size * 3)}px -apple-system, system-ui, sans-serif`; ctx.textBaseline = "top";
+    text.split("\n").forEach((line, i) => ctx.fillText(line, p.x, p.y + i * Math.max(12, size * 3) * 1.2));
+    ctx.restore(); pushUndo(l.id, before); render(); force((n) => n + 1);
   }
   function onMove(e: React.PointerEvent) {
     if (!pointers.current.has(e.pointerId)) return;
@@ -354,6 +378,7 @@ export function DrawingApp() {
     const t = xf.current;
     if (t) { const p = toCanvas(e); t.dx = p.x - t.sx; t.dy = p.y - t.sy; setXfOff({ dx: t.dx, dy: t.dy }); scheduleRender(); return; }
     const d = drawing.current; if (!d) return;
+    if (d.shape) { drawShape(d.pts[0]!, toCanvas(e)); scheduleRender(); return; }
     const evs = (e.nativeEvent as PointerEvent).getCoalescedEvents?.() ?? [e.nativeEvent];
     for (const ev of evs) {
       const p = toCanvas(ev), pr = ev.pointerType === "pen" ? ev.pressure || 0.5 : 0.5;
@@ -515,10 +540,6 @@ export function DrawingApp() {
     const item = TOOL_ITEMS.find((t) => t.id === id);
     if (item?.tool) { pickTool(item.tool); return; }
     if (id === "fit") { fit(); return; }
-    if (id === "resetRotation") { const v = viewNow.current, p = toWorld(innerWidth / 2, innerHeight / 2); setView(anchor(p.x, p.y, innerWidth / 2, innerHeight / 2, v.s, 0)); return; }
-    if (id === "deselect") { setSel(null); return; }
-    if (id === "import") { importImage(); return; }
-    if (id === "export") { exportPng(); return; }
   }
 
   function patchNode(id: number, patch: Partial<NodeProps>) { setLayers((ls) => ls.map((n) => (n.id === id ? ({ ...n, ...patch } as Node) : n))); }
@@ -614,8 +635,8 @@ export function DrawingApp() {
           redo: <Button variant="ghost" size="icon" className="size-8 rounded-full" onClick={doRedo} disabled={!redo.current.length} aria-label="Redo" title="Redo"><Redo2 size={16} /></Button>,
           layers: <Button variant="ghost" size="icon" className={`size-8 rounded-full ${panel === "layers" ? "bg-accent" : ""}`} onClick={() => setPanel(panel === "layers" ? null : "layers")} aria-label="Layers" title="Layers"><Layers size={16} /></Button>,
           files: <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="ghost" aria-label="Files" className="flex h-8 w-full shrink-0 items-center gap-1 rounded-full px-2 text-[13px] font-semibold outline-none transition-colors hover:bg-accent data-[state=open]:bg-accent">
-              Files <ChevronDown size={13} className="opacity-70" />
+            <DropdownMenuTrigger asChild><Button variant="ghost" aria-label="File" className="flex h-8 w-full shrink-0 items-center gap-1 rounded-full px-2 text-[13px] font-semibold outline-none transition-colors hover:bg-accent data-[state=open]:bg-accent">
+              File <ChevronDown size={13} className="opacity-70" />
             </Button></DropdownMenuTrigger>
             <DropdownMenuContent align="start" sideOffset={10} className="glass-strong min-w-56 rounded-2xl border-glass-border p-1.5 text-foreground">
               <DropdownMenuItem className={MI} onSelect={newCanvas}>New Canvas</DropdownMenuItem>

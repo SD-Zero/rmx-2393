@@ -131,8 +131,8 @@ export function LayersPanel({ nodes, activeId, rev, onSelect, onPatch, onAction,
           <div className="flex items-center gap-3">
             <span className="w-14 text-xs text-muted-foreground">Opacity</span>
             <SliderPrimitive.Root aria-label="Layer opacity" min={0} max={100} step={1} value={[active.opacity]} onValueChange={([v]) => onPatch(active.id, { opacity: v ?? 100 })} className="relative flex h-6 flex-1 cursor-ew-resize touch-none select-none items-center">
-              <SliderPrimitive.Track className="relative h-3 w-full grow overflow-hidden rounded-full bg-muted"><SliderPrimitive.Range className="absolute h-full bg-primary" /></SliderPrimitive.Track>
-              <SliderPrimitive.Thumb className="block h-[22px] w-[30px] rounded-full bg-primary-foreground shadow-[0_2px_6px_rgb(0_0_0/0.3)] outline-none" />
+              <SliderPrimitive.Track className="relative h-2 w-full grow overflow-hidden rounded-full bg-muted"><SliderPrimitive.Range className="absolute h-full bg-primary" /></SliderPrimitive.Track>
+              <SliderPrimitive.Thumb className="block h-[18px] w-[26px] rounded-full bg-primary-foreground shadow-[0_2px_6px_rgb(0_0_0/0.3)] outline-none" />
             </SliderPrimitive.Root>
             <span className="w-9 text-right text-xs tabular-nums">{Math.round(active.opacity)}%</span>
           </div>

@@ -1,10 +1,12 @@
-import { Brush, PaintBucket, Eraser, Lasso, Move, Droplet, Pointer, Hand, Pipette, Scan, RotateCcw, SquareDashed, ImagePlus, Download, Folder, Type, Ellipsis, Undo2, Redo2, Layers, Circle, type LucideIcon } from "lucide-react";
+import { Brush, PaintBucket, Eraser, Lasso, Move, Droplet, Pointer, MousePointer2, Pipette, Scan, Folder, Type, Ellipsis, Undo2, Redo2, Layers, Circle, Square, RectangleHorizontal, Triangle, createLucideIcon, type LucideIcon } from "lucide-react";
 
-export type Tool = "brush" | "bucket" | "eraser" | "lasso" | "transform" | "blur" | "smudge" | "hand" | "eyedropper";
+export type Tool = "brush" | "bucket" | "eraser" | "lasso" | "transform" | "blur" | "smudge" | "hand" | "eyedropper" | "text" | "circle" | "ellipse" | "square" | "rectangle" | "triangle";
+export const SHAPE_TOOLS: Tool[] = ["circle", "ellipse", "square", "rectangle", "triangle"];
+const EllipseIcon = createLucideIcon("Ellipse", [["ellipse", { cx: "12", cy: "12", rx: "10", ry: "6", key: "e" }]]);
 export type ToolItem = { id: string; label: string; icon: LucideIcon; tool?: Tool; slots?: number };
 export const REARRANGE_HOLD_MS = 2000;
 export const TOOL_ITEMS: ToolItem[] = [
-  { id: "files", label: "Files", icon: Folder, slots: 2 },
+  { id: "files", label: "File", icon: Folder, slots: 2 },
   { id: "title", label: "Artwork title", icon: Type, slots: 4 },
   { id: "more", label: "More tools", icon: Ellipsis },
   { id: "undo", label: "Undo", icon: Undo2 },
@@ -18,13 +20,15 @@ export const TOOL_ITEMS: ToolItem[] = [
   { id: "transform", label: "Transform", icon: Move, tool: "transform" },
   { id: "blur", label: "Blur", icon: Droplet, tool: "blur" },
   { id: "smudge", label: "Smudge", icon: Pointer, tool: "smudge" },
-  { id: "hand", label: "Pan", icon: Hand, tool: "hand" },
+  { id: "hand", label: "Pan", icon: MousePointer2, tool: "hand" },
   { id: "eyedropper", label: "Eyedropper", icon: Pipette, tool: "eyedropper" },
   { id: "fit", label: "Fit canvas", icon: Scan },
-  { id: "resetRotation", label: "Reset rotation", icon: RotateCcw },
-  { id: "deselect", label: "Deselect", icon: SquareDashed },
-  { id: "import", label: "Import image", icon: ImagePlus },
-  { id: "export", label: "Export PNG", icon: Download },
+  { id: "text", label: "Text", icon: Type, tool: "text" },
+  { id: "circle", label: "Circle", icon: Circle, tool: "circle" },
+  { id: "ellipse", label: "Ellipsoid", icon: EllipseIcon, tool: "ellipse" },
+  { id: "square", label: "Square", icon: Square, tool: "square" },
+  { id: "rectangle", label: "Rectangle", icon: RectangleHorizontal, tool: "rectangle" },
+  { id: "triangle", label: "Triangle", icon: Triangle, tool: "triangle" },
 ];
 export type ToolbarLayout = { id: string; slot: number }[];
 const DEFAULT_LEFT = ["files", "color", "brush", "bucket", "eraser"];
