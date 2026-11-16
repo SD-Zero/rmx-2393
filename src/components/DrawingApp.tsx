@@ -658,7 +658,6 @@ export function DrawingApp() {
         <button onClick={() => setRotLock(!rotLock)} aria-label="Lock rotation" className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 transition-colors ${rotLock ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}>
           {rotLock ? <Lock size={12} /> : <LockOpen size={12} />}{Math.round(view.r)}°
         </button>
-        <span className="px-2 text-muted-foreground">{activeNode?.name}</span>
       </div>
     </div>
   );
