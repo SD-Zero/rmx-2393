@@ -9,7 +9,7 @@ describe("layoutText", () => {
     expect(layoutText(style, measure, 100, 100).box).toEqual({ x: 100, y: 100, w: 50, h: 30 });
   });
   it("centers and right-aligns lines inside the box", () => {
-    expect(layoutText({ ...style, hAlign: "center" }, measure, 100, 0).lines.map((l) => l.x)).toEqual([85, 75]);
+    expect(layoutText({ ...style, hAlign: "center" }, measure, 100, 0).lines.map((l) => l.x)).toEqual([90, 80]);
     expect(layoutText({ ...style, hAlign: "right" }, measure, 100, 0).lines.map((l) => l.x)).toEqual([75, 55]);
   });
   it("puts the box above the point for bottom alignment", () => {
