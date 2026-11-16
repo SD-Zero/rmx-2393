@@ -16,7 +16,7 @@ export const TOOL_ITEMS: ToolItem[] = [
   { id: "brush", label: "Brush", icon: Brush, tool: "brush" },
   { id: "bucket", label: "Paint bucket", icon: PaintBucket, tool: "bucket" },
   { id: "eraser", label: "Eraser", icon: Eraser, tool: "eraser" },
-  { id: "lasso", label: "Lasso select", icon: Lasso, tool: "lasso" },
+  { id: "lasso", label: "Lasso", icon: Lasso, tool: "lasso" },
   { id: "transform", label: "Transform", icon: Move, tool: "transform" },
   { id: "blur", label: "Blur", icon: Droplet, tool: "blur" },
   { id: "smudge", label: "Smudge", icon: Pointer, tool: "smudge" },
