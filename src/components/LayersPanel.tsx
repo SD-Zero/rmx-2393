@@ -4,7 +4,7 @@ import { DndContext, DragOverlay, MouseSensor, TouchSensor, pointerWithin, useDr
 import { ChevronDown, ChevronRight, CornerLeftDown, Ellipsis, Eye, EyeOff, Folder, FolderPlus, Lock, Plus, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
+import * as SliderPrimitive from "@radix-ui/react-slider";
 import { getEventCoordinates } from "@dnd-kit/utilities";
 import { BLEND_MODES, clipBase, descendantIds, displayRows, isLocked, siblingBelow, type BlendMode, type DropWhere, type NodeProps } from "@/lib/layerTree";
 
@@ -106,7 +106,7 @@ export function LayersPanel({ nodes, activeId, rev, onSelect, onPatch, onAction,
     setDrop({ id: target.id, where: w });
   }
   return (
-    <div className="glass-strong animate-pop absolute right-1/2 top-16 flex max-h-[calc(100dvh-80px)] w-80 max-w-[calc(100vw-24px)] translate-x-1/2 flex-col rounded-3xl p-3 sm:right-6 sm:translate-x-0">
+    <div className="glass-strong animate-pop absolute right-1/2 top-16 flex max-h-[calc(100dvh-140px)] w-80 max-w-[calc(100vw-24px)] translate-x-1/2 flex-col rounded-3xl p-3 sm:right-6 sm:translate-x-0">
       <div className="mb-2 flex shrink-0 items-center justify-between px-1">
         <p className="text-sm font-semibold">Layers</p>
         <div className="flex">
@@ -130,7 +130,10 @@ export function LayersPanel({ nodes, activeId, rev, onSelect, onPatch, onAction,
         <div className="mt-3 shrink-0 space-y-2.5 border-t border-glass-border px-1 pt-3">
           <div className="flex items-center gap-3">
             <span className="w-14 text-xs text-muted-foreground">Opacity</span>
-            <Slider aria-label="Layer opacity" min={0} max={100} step={1} value={[active.opacity]} onValueChange={([v]) => onPatch(active.id, { opacity: v ?? 100 })} className="flex-1" />
+            <SliderPrimitive.Root aria-label="Layer opacity" min={0} max={100} step={1} value={[active.opacity]} onValueChange={([v]) => onPatch(active.id, { opacity: v ?? 100 })} className="relative flex h-6 flex-1 cursor-ew-resize touch-none select-none items-center">
+              <SliderPrimitive.Track className="relative h-3 w-full grow overflow-hidden rounded-full bg-muted"><SliderPrimitive.Range className="absolute h-full bg-primary" /></SliderPrimitive.Track>
+              <SliderPrimitive.Thumb className="block h-[22px] w-[30px] rounded-full bg-primary-foreground shadow-[0_2px_6px_rgb(0_0_0/0.3)] outline-none" />
+            </SliderPrimitive.Root>
             <span className="w-9 text-right text-xs tabular-nums">{Math.round(active.opacity)}%</span>
           </div>
           <div className="flex items-center gap-3">
