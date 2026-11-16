@@ -38,3 +38,4 @@ use the editor.
 - Store toolbar placement as fixed slot positions and never reflow it automatically; users rely on gaps and positions staying exactly where they dropped them.
 - Keep layers as a flat list of nodes pointing at their parent folder, with tree rules in layerTree; one list keeps reordering, saving and undo snapshots simple.
 - Composite folders into isolated buffers and cut clipping masks to their base layer's pixels; this keeps folder opacity/blend and clipping consistent on screen, in exports and in the eyedropper.
+- Keep text layout and drawing in textRender (pure layout plus a canvas painter) and preview pending text through layerSource; preview and placed text then match exactly.
