@@ -10,6 +10,8 @@ import { IS_VERSION, parseIsFile, type IsDoc } from "@/lib/isFormat";
 import { ColorPicker } from "./ColorPicker";
 import { rememberColor } from "@/lib/colorValues";
 import { ToolShelf } from "./ToolShelf";
+import { TextPanel } from "./TextPanel";
+import { DEFAULT_TEXT_STYLE, drawText, fontString, layoutText, measureWith, type TextStyle } from "@/lib/textRender";
 import { Button } from "@/components/ui/button";
 import { SHAPE_TOOLS, TOOL_ITEMS, artworkFilename, artworkName, type Tool } from "@/lib/toolbar";
 
@@ -66,6 +68,11 @@ export function DrawingApp() {
   const [lassoPts, setLassoPts] = useState<P2[] | null>(null);
   const xf = useRef<{ layer: Layer; float: HTMLCanvasElement; sx: number; sy: number; dx: number; dy: number; before: ImageData } | null>(null);
   const [xfOff, setXfOff] = useState({ dx: 0, dy: 0 });
+  const [textAt, setTextAt] = useState<{ x: number; y: number; layerId: number } | null>(null);
+  const [textStyle, setTextStyle] = useState<TextStyle>(DEFAULT_TEXT_STYLE);
+  const textRef = useRef<{ at: NonNullable<typeof textAt>; style: TextStyle } | null>(null);
+  textRef.current = textAt && { at: textAt, style: textStyle };
+  const textDrag = useRef(false), textBuf = useRef<HTMLCanvasElement | null>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<{ d: number; a: number; cx: number; cy: number; v: typeof view } | null>(null);
 
@@ -118,6 +125,11 @@ export function DrawingApp() {
   const clipBuf = useRef<HTMLCanvasElement | null>(null), xfBuf = useRef<HTMLCanvasElement | null>(null);
   function layerSource(l: Layer): HTMLCanvasElement {
     if (drawing.current && !drawing.current.direct && drawing.current.layer.id === l.id && strokeRef.current) return composeLive(l);
+    const tx = textRef.current;
+    if (tx && tx.at.layerId === l.id) {
+      const b = (textBuf.current ??= mkCanvas(W, H)), c = b.getContext("2d")!;
+      c.globalCompositeOperation = "copy"; c.drawImage(l.canvas, 0, 0); c.globalCompositeOperation = "source-over"; paintText(c, l, tx.style, tx.at); return b;
+    }
     const t = xf.current;
     if (t && t.layer.id === l.id) {
       const b = (xfBuf.current ??= mkCanvas(W, H)), c = b.getContext("2d")!;
@@ -284,6 +296,8 @@ export function DrawingApp() {
   const activeNode = layers.find((l) => l.id === activeId);
   const active = activeNode?.kind === "layer" ? activeNode : undefined;
 
+  const textBox = textAt ? layoutText(textStyle, measureWith(measureCtx(), textStyle), textAt.x, textAt.y).box : null;
+
   function onDown(e: React.PointerEvent) {
     setPanel(null);
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -296,7 +310,7 @@ export function DrawingApp() {
     if (pointers.current.size > 2) return;
     if (pointers.current.size === 2) {
       if (drawing.current) { drawing.current.layer.canvas.getContext("2d")!.putImageData(drawing.current.before, 0, 0); cancelStroke(); render(); }
-      cancelTransient();
+      cancelTransient(); textDrag.current = false;
       const [p1, p2] = [...pointers.current.values()] as [{ x: number; y: number }, { x: number; y: number }];
       gesture.current = { d: Math.hypot(p1.x - p2.x, p1.y - p2.y), a: Math.atan2(p2.y - p1.y, p2.x - p1.x), cx: (p1.x + p2.x) / 2, cy: (p1.y + p2.y) / 2, v: viewNow.current };
       return;
@@ -316,7 +330,7 @@ export function DrawingApp() {
     if (tool === "lasso") { lasso.current = [p]; setLassoPts([p]); return; }
     if (tool === "bucket") { bucket(active, p); return; }
     if (tool === "transform") { startTransform(active, p); return; }
-    if (tool === "text") { placeText(active, p); return; }
+    if (tool === "text") { if (!textAt) setTextStyle((st) => ({ ...st, fill: color })); setTextAt({ x: p.x, y: p.y, layerId: active.id }); textDrag.current = true; return; }
     const direct = tool === "blur" || tool === "smudge";
     const before = active.canvas.getContext("2d")!.getImageData(0, 0, W, H);
     strokeRef.current!.getContext("2d")!.clearRect(0, 0, W, H);
@@ -329,6 +343,25 @@ export function DrawingApp() {
     else if (direct) { if (tool === "blur") dab(active, p, p); } else stamp({ ...p, p: pr }, { ...p, p: pr });
     render();
   }
+  function paintText(ctx: CanvasRenderingContext2D, l: Layer, st: TextStyle, at: { x: number; y: number }) {
+    ctx.save(); if (sel) ctx.clip(selPath(sel));
+    ctx.globalAlpha = opacity / 100; if (l.alphaLock) ctx.globalCompositeOperation = "source-atop";
+    drawText(ctx, st, at.x, at.y); ctx.restore();
+  }
+  function commitText() {
+    const at = textAt; setTextAt(null); textRef.current = null;
+    const l = at && layers.find((x): x is Layer => x.id === at.layerId && x.kind === "layer");
+    if (l && textStyle.text.trim()) {
+      const ctx = l.canvas.getContext("2d")!, before = ctx.getImageData(0, 0, W, H);
+      paintText(ctx, l, textStyle, at); pushUndo(l.id, before); setTextStyle((st) => ({ ...st, text: "" }));
+    }
+    render();
+  }
+  useEffect(() => { if (tool !== "text" && textAt) commitText(); }, [tool]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    renderLatest.current();
+    if (textAt) document.fonts.load(fontString(textStyle)).then(() => { renderLatest.current(); force((n) => n + 1); }).catch(() => {});
+  }, [textAt, textStyle]);
   function drawShape(a: { x: number; y: number }, b: { x: number; y: number }) {
     const c = strokeRef.current!.getContext("2d")!;
     c.clearRect(0, 0, W, H);
@@ -340,16 +373,6 @@ export function DrawingApp() {
     else if (tool === "triangle") { c.moveTo(x + w / 2, y); c.lineTo(x + w, y + h); c.lineTo(x, y + h); c.closePath(); }
     else c.rect(x, y, w, h);
     c.stroke(); c.restore();
-  }
-  function placeText(l: Layer, p: { x: number; y: number }) {
-    const text = window.prompt("Text");
-    if (!text) return;
-    const ctx = l.canvas.getContext("2d")!, before = ctx.getImageData(0, 0, W, H);
-    ctx.save(); if (sel) ctx.clip(selPath(sel));
-    ctx.globalAlpha = opacity / 100; if (l.alphaLock) ctx.globalCompositeOperation = "source-atop";
-    ctx.fillStyle = color; ctx.font = `${Math.max(12, size * 3)}px -apple-system, system-ui, sans-serif`; ctx.textBaseline = "top";
-    text.split("\n").forEach((line, i) => ctx.fillText(line, p.x, p.y + i * Math.max(12, size * 3) * 1.2));
-    ctx.restore(); pushUndo(l.id, before); render(); force((n) => n + 1);
   }
   function onMove(e: React.PointerEvent) {
     if (!pointers.current.has(e.pointerId)) return;
@@ -374,6 +397,7 @@ export function DrawingApp() {
       } else setView({ ...g.v, x: g.v.x + e.clientX - g.cx, y: g.v.y + e.clientY - g.cy });
       return;
     }
+    if (textDrag.current) { const p = toCanvas(e); setTextAt((t) => t && { ...t, x: p.x, y: p.y }); return; }
     if (lasso.current) { lasso.current.push(toCanvas(e)); setLassoPts([...lasso.current]); return; }
     const t = xf.current;
     if (t) { const p = toCanvas(e); t.dx = p.x - t.sx; t.dy = p.y - t.sy; setXfOff({ dx: t.dx, dy: t.dy }); scheduleRender(); return; }
@@ -411,6 +435,7 @@ export function DrawingApp() {
       return;
     }
     if (pointers.current.size > 0 && tp && tp.max > 2) return;
+    if (textDrag.current) { textDrag.current = false; return; }
     if (lasso.current) {
       const pts = lasso.current; lasso.current = null; setLassoPts(null);
       let area = 0; for (let i = 0; i < pts.length; i++) { const a = pts[i]!, b = pts[(i + 1) % pts.length]!; area += a.x * b.y - b.x * a.y; }
@@ -618,10 +643,11 @@ export function DrawingApp() {
         style={{ cursor: tool === "hand" ? "grab" : tool === "transform" ? "move" : "crosshair" }}>
         <canvas ref={viewRef} width={W} height={H} className="absolute left-0 top-0 origin-top-left rounded-sm shadow-2xl"
           style={{ transform: `translate(${view.x}px, ${view.y}px) rotate(${view.r}deg) scale(${view.s})` }} />
-        {(sel || lassoPts) && (
+        {(sel || lassoPts || textBox) && (
           <svg width={W} height={H} className="pointer-events-none absolute left-0 top-0 origin-top-left overflow-visible"
             style={{ transform: `translate(${view.x}px, ${view.y}px) rotate(${view.r}deg) scale(${view.s})` }}>
             {sel && <polygon points={sel.map((q) => `${q.x + xfOff.dx},${q.y + xfOff.dy}`).join(" ")} className="ants fill-primary/10 stroke-primary" strokeWidth={1.5} vectorEffect="non-scaling-stroke" strokeDasharray="6 4" />}
+            {textBox && <rect x={textBox.x} y={textBox.y} width={Math.max(textBox.w, textStyle.size / 2)} height={textBox.h} className="fill-none stroke-primary" strokeWidth={1.5} vectorEffect="non-scaling-stroke" strokeDasharray="6 4" />}
             {lassoPts && <polyline points={lassoPts.map((q) => `${q.x},${q.y}`).join(" ")} className="fill-none stroke-primary" strokeWidth={1.5} vectorEffect="non-scaling-stroke" strokeDasharray="6 4" />}
           </svg>
         )}
@@ -661,6 +687,8 @@ export function DrawingApp() {
         <ColorPicker color={color} recent={recentColors} onChange={setColor} onCommit={(c) => setRecentColors((recent) => rememberColor(recent, c))} onClose={() => setPanel(null)} />
       )}
 
+      {textAt && <TextPanel style={textStyle} onChange={(patch) => setTextStyle((st) => ({ ...st, ...patch }))} onDone={commitText} onCancel={() => setTextAt(null)} />}
+
       {panel === "layers" && (
         <LayersPanel nodes={layers} activeId={activeId} rev={rev} onSelect={setActiveId} onPatch={patchNode} onAction={layerAction} onMove={moveLayer} />
       )}
@@ -683,6 +711,9 @@ export function DrawingApp() {
     </div>
   );
 }
+
+let mctx: CanvasRenderingContext2D | null = null;
+const measureCtx = () => (mctx ??= document.createElement("canvas").getContext("2d")!);
 
 function hexA(hex: string, a: number) {
   const n = parseInt(hex.slice(1), 16);
